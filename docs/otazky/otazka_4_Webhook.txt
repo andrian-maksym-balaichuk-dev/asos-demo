@@ -3,7 +3,7 @@ AIS ID: <AIS ID>
 Téma: Typy API
 Otázka: Platobná brána doručí tú istú udalosť payment.succeeded (s rovnakým event ID) druhýkrát. Čo má správne implementovaný príjemca webhooku urobiť?
 Odpovede:
-+ overiť podpis, zistiť, že event ID už bolo spracované, odpovedať úspechom (2xx) a stav nemeniť
-- odpovedať chybou 409 Conflict, aby brána prestala udalosť posielať
-- udalosť spracovať znova, pretože brána ju poslala zámerne
++ overiť podpis, podľa event ID zistiť, že udalosť už bola spracovaná, a stav druhýkrát nemeniť
+- udalosť spracovať znova, pretože každé doručenie znamená novú platbu
 - preskočiť overenie podpisu, pretože event ID je už známe z prvého doručenia
+- spoľahnúť sa na to, že WebSocket klientom zmenu druhýkrát nepošle

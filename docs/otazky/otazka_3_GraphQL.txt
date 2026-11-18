@@ -1,9 +1,9 @@
 Meno: <meno a priezvisko>
 AIS ID: <AIS ID>
 Téma: Typy API
-Otázka: Prečo sa DataLoader v GraphQL serveri vytvára nový pre každý request, a nie jeden zdieľaný pre celú aplikáciu?
+Otázka: GraphQL server obmedzuje maximálnu hĺbku query. Prečo samotný limit hĺbky nestačí na ochranu pred drahými query?
 Odpovede:
-+ aby sa cache načítaných dát jedného používateľa nedostala k inému používateľovi s inými oprávneniami
-- aby sa znížil celkový počet SQL dotazov naprieč všetkými requestami
-- pretože špecifikácia GraphQL zakazuje zdieľať objekty medzi requestami
-- pretože zdieľaný DataLoader by vypol obmedzenie hĺbky query
++ limit hĺbky neobmedzí šírku query — počet položiek na každej úrovni môže stále rásť (napr. 10 × 10 × 10)
+- limit hĺbky sa uplatňuje iba na mutácie, nie na query
+- klient môže limit hĺbky obísť, ak pošle query cez HTTP GET namiesto POST
+- limit hĺbky zakáže aj jednoduché query, a preto sa v praxi vypína

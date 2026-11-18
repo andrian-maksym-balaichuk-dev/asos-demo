@@ -168,3 +168,14 @@ Najviac 15 s debugovania naživo. Potom CLI fallback. Ak nejde ani ten, otvor `d
 - [ ] Záloha snímok obrazovky a statický/PDF export prezentácie.
 - [ ] Každý moderátor vie, kedy má prevziať ovládanie.
 - [ ] Celkový čas 40:00; skrátiť iba diskusiu, nie vysvetlenie technických záväzkov.
+
+## I. Otázky na skúšku — čo MUSÍ zaznieť nahlas
+
+Každý člen tímu odovzdá jednu otázku (`docs/otazky/`). Odpoveď musí byť na slajde **a** povedaná nahlas, aby otázka bola férová.
+
+| Otázka | Kto | Slajd | Veta, ktorú treba povedať |
+|---|---|---|---|
+| 1 · REST: dvaja kupujúci naraz | Demo 1 | 05 | „Idempotency-Key nepomôže — sú to dva rôzne nákupy. Jedno miesto zaručí iba unikátne obmedzenie alebo atomický zápis v databáze.“ |
+| 2 · gRPC: deadline 200 ms, server 800 ms | Demo 2 | 12 | „Klient dostane DEADLINE_EXCEEDED, ale server mohol operáciu už vykonať. Zrušenie ju automaticky nevráti späť.“ |
+| 3 · GraphQL: limit hĺbky | Demo 3 | 17 | „Limit hĺbky nestačí — neobmedzí šírku. Pri rozvetvení 10× na úroveň sú tri úrovne už 1 000 položiek. Preto aj paginácia a query cost.“ |
+| 4 · Webhook: rovnaká udalosť druhýkrát | Demo 4 | 23–24 | „Najprv overíme podpis, potom podľa event ID zistíme, že sme udalosť už spracovali — stav druhýkrát nezmeníme.“ |
