@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="sk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TicketFlow Kód</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/code.css">
+</head>
+<body>
+<header class="top">
+  <h1>TicketFlow <span class="muted">· kód dema</span></h1>
+  <div class="health">
+    <a class="chip" href="/">← Demo panel</a>
+    <a class="chip" href="/docs" target="_blank" rel="noopener">Swagger ↗</a>
+  </div>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button role="tab" data-tab="A" aria-selected="true"><span class="dot" style="background:var(--blue)"></span>A · REST</button>
+  <button role="tab" data-tab="B" aria-selected="false"><span class="dot" style="background:var(--purple)"></span>B · SOAP &amp; gRPC</button>
+  <button role="tab" data-tab="C" aria-selected="false"><span class="dot" style="background:var(--teal)"></span>C · GraphQL</button>
+  <button role="tab" data-tab="D" aria-selected="false"><span class="dot" style="background:var(--orange)"></span>D · Webhook &amp; WS</button>
+</nav>
+
+<main class="code-page" id="code-page" data-demo="A">
+  <ol class="step-list" id="step-list"></ol>
+
+  <section class="step">
+    <div class="step-head">
+      <span class="side" id="step-side">—</span>
+      <span class="counter" id="step-counter"></span>
+    </div>
+    <h2 id="step-title">Načítavam kód…</h2>
+    <p class="step-text" id="step-text"></p>
+    <div id="step-code"></div>
+    <div class="step-nav">
+      <button class="btn ghost" id="prev">◀ Späť</button>
+      <button class="btn" id="next">Ďalej ▶</button>
+    </div>
+  </section>
+</main>
+<script src="/static/code.js"></script>
+</body>
+</html>

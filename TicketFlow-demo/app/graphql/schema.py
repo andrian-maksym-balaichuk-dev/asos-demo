@@ -81,11 +81,13 @@ class Seat:
     event_id: strawberry.Private[str]
 
     @strawberry.field(description="Cena — naivne 1 SQL na sedadlo, alebo cez DataLoader dávkovo")
+    # ── ukážka C3 ──
     async def price(self, info: Info) -> Price | None:
         # Tento resolver sa zavolá PRE KAŽDÉ sedadlo (100×). Celý rozdiel dema je tu:
         if info.context.mode == "naive":
             return await price_naive(info.context, self.event_id, self.id)
         return await price_batched(info.context, self.event_id, self.id)
+    # ── /ukážka C3 ──
 
 
 @strawberry.type(description="Udalosť (koncert)")
@@ -128,6 +130,7 @@ schema = strawberry.Schema(query=Query, extensions=[QueryDepthLimiter(max_depth=
 # 3. Načítanie ceny: NAIVNE vs. BATCHING
 # ════════════════════════════════════════════════════════════════════════
 
+# ── ukážka C4 ──
 async def price_naive(ctx: GQLContext, event_id: str, seat_id: str) -> Price | None:
     """N+1: každé sedadlo si urobí VLASTNÝ SQL dotaz → 100 sedadiel = 100 dotazov."""
     rows = await ctx.fetch(SQL_PRICE_ONE_SEAT, {"event_id": event_id, "seat_id": seat_id})
@@ -138,8 +141,10 @@ async def price_batched(ctx: GQLContext, event_id: str, seat_id: str) -> Price |
     """DataLoader: iba ZAPÍŠE kľúč. SQL sa spustí raz pre všetky zozbierané kľúče."""
     row = await ctx.price_loader.load((event_id, seat_id))
     return to_price(row) if row else None
+# ── /ukážka C4 ──
 
 
+# ── ukážka C5 ──
 async def load_prices_in_one_query(ctx: GQLContext, keys: list[tuple[str, str]]) -> list:
     """Dávková funkcia DataLoadera.
 
@@ -157,6 +162,7 @@ async def load_prices_in_one_query(ctx: GQLContext, keys: list[tuple[str, str]])
             found[(event_id, row.seat_id)] = row
 
     return [found.get(key) for key in keys]
+# ── /ukážka C5 ──
 
 
 def to_price(row) -> Price:

@@ -21,6 +21,7 @@ from app.common import correlation_id, new_correlation_id, problem
 from app.data.db import engine, ping
 from app.data.seed import ensure_seeded
 from app.graphql.endpoint import router as graphql_router
+from app.routes.code_view import router as code_router
 from app.routes.demo import router as demo_router
 from app.routes.rest import router as rest_router
 from app.webhook.receiver import router as webhook_router
@@ -155,6 +156,7 @@ app.include_router(graphql_router)    # Demo C — GraphQL
 app.include_router(webhook_router)    # Demo D — Webhook
 app.include_router(ws_router)         # WebSocket notifikácie
 app.include_router(demo_router)       # ovládanie dema
+app.include_router(code_router)       # stránka /code — prechod kódom
 
 
 # ════════════════════════════════════════════════════════════════════════

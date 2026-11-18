@@ -84,22 +84,19 @@ type Price  { amount: Float!  currency: String!  internalCost: Float! }   # inte
 
 | Čo | Súbor : riadok |
 |---|---|
-| Typy schémy (`Price`, `Seat`, `Event`, `Query`) | [schema.py:62–124](../TicketFlow-demo/app/graphql/schema.py#L62-L124) |
-| SQL dotazy (jeden vs. `IN (…)`) | [schema.py:32–54](../TicketFlow-demo/app/graphql/schema.py#L32-L54) |
-| **Resolver `Seat.price` (celý rozdiel dema)** | [schema.py:84–88](../TicketFlow-demo/app/graphql/schema.py#L84-L88) |
-| **Naivne vs. batching, dve funkcie vedľa seba** | [schema.py:131–140](../TicketFlow-demo/app/graphql/schema.py#L131-L140) |
-| **DataLoader, dávková funkcia** `load_prices_in_one_query` | [schema.py:143–159](../TicketFlow-demo/app/graphql/schema.py#L143-L159) |
-| Ochrana `limit` 1–100 | [schema.py:96–101](../TicketFlow-demo/app/graphql/schema.py#L96-L101) |
-| Autorizácia poľa `internalCost` | [schema.py:68–73](../TicketFlow-demo/app/graphql/schema.py#L68-L73) |
-| Hĺbka query max. 6 | [schema.py:124](../TicketFlow-demo/app/graphql/schema.py#L124) |
-| Nový kontext + DataLoader na každý request | [schema.py:180–197](../TicketFlow-demo/app/graphql/schema.py#L180-L197) |
-| Endpointy `/graphql` a `/graphql/naive` | [endpoint.py:30–69](../TicketFlow-demo/app/graphql/endpoint.py#L30-L69) |
-| **Počítanie SQL (event hook)** | [db.py:37–65](../TicketFlow-demo/app/data/db.py#L37-L65) |
-| Tabuľky `seats` a `prices` (oddelené zámerne) | [models.py:25–43](../TicketFlow-demo/app/data/models.py#L25-L43) |
+| Klient pošle query (prehliadač) | [app.js:444–448](../TicketFlow-demo/frontend/app.js#L444-L448) |
+| Endpoint: nové spojenie + DataLoader na request | [endpoint.py:41–70](../TicketFlow-demo/app/graphql/endpoint.py#L41-L70) |
+| **Resolver `Seat.price` (celý rozdiel dema)** | [schema.py:85–89](../TicketFlow-demo/app/graphql/schema.py#L85-L89) |
+| **Naivne vs. batching, dve funkcie vedľa seba** | [schema.py:134–143](../TicketFlow-demo/app/graphql/schema.py#L134-L143) |
+| **DataLoader, dávková funkcia** `load_prices_in_one_query` | [schema.py:148–164](../TicketFlow-demo/app/graphql/schema.py#L148-L164) |
+| **Počítanie SQL (event hook)** | [db.py:38–42](../TicketFlow-demo/app/data/db.py#L38-L42) |
+| Spojenie so SQL logom (AUTOCOMMIT) | [db.py:57–68](../TicketFlow-demo/app/data/db.py#L57-L68) |
+
+Všetky tieto ukážky sú aj na stránke **http://localhost:8000/code?tab=C** (krok po kroku, skutočný kód).
 
 **Ak ukazuješ kód, stačia tieto 2 výrezy (do 30 s):**
 
-Resolver, celý rozdiel je v jednej podmienke ([schema.py:84](../TicketFlow-demo/app/graphql/schema.py#L84)):
+Resolver, celý rozdiel je v jednej podmienke ([schema.py:85–89](../TicketFlow-demo/app/graphql/schema.py#L85-L89)):
 
 ```python
 async def price(self, info) -> Price | None:
@@ -109,7 +106,7 @@ async def price(self, info) -> Price | None:
     return await price_batched(info.context, self.event_id, self.id)
 ```
 
-Dve funkcie vedľa seba ([schema.py:131](../TicketFlow-demo/app/graphql/schema.py#L131)):
+Dve funkcie vedľa seba ([schema.py:134–143](../TicketFlow-demo/app/graphql/schema.py#L134-L143)):
 
 ```python
 async def price_naive(ctx, event_id, seat_id):
@@ -121,7 +118,7 @@ async def price_batched(ctx, event_id, seat_id):
     row = await ctx.price_loader.load((event_id, seat_id))
 ```
 
-**Prečo veríme číslu 101/2:** [db.py:37](../TicketFlow-demo/app/data/db.py#L37) je SQLAlchemy hook `before_cursor_execute`. Zapíše **každý príkaz, ktorý naozaj odíde do PostgreSQL** na spojení daného requestu. Spojenie je v režime AUTOCOMMIT, takže sa nepočíta ani skrytý `BEGIN`. Číslo nikde nie je napísané ručne a odpoveď ho vracia v `extensions.sql.count`.
+**Prečo veríme číslu 101/2:** [db.py:38–42](../TicketFlow-demo/app/data/db.py#L38-L42) je SQLAlchemy hook `before_cursor_execute`. Zapíše **každý príkaz, ktorý naozaj odíde do PostgreSQL** na spojení daného requestu. Spojenie je v režime AUTOCOMMIT, takže sa nepočíta ani skrytý `BEGIN`. Číslo nikde nie je napísané ručne a odpoveď ho vracia v `extensions.sql.count`.
 
 ---
 

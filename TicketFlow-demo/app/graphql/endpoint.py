@@ -37,6 +37,7 @@ async def graphql_naive(req: GraphQLRequest, x_demo_role: str = Header(default="
     return await run_query(req, mode="naive", role=x_demo_role)
 
 
+# ── ukážka C2 ──
 async def run_query(req: GraphQLRequest, mode: str, role: str) -> JSONResponse:
     role = "admin" if role == "admin" else "public"     # demo rola; v produkcii z overeného tokenu
     started = time.perf_counter()
@@ -67,6 +68,7 @@ async def run_query(req: GraphQLRequest, mode: str, role: str) -> JSONResponse:
     }
     # GraphQL vracia 200 aj pri chybách v poliach — chyby sú v "errors"
     return JSONResponse(body, status_code=200)
+# ── /ukážka C2 ──
 
 
 @router.get("/graphql/schema.graphql", summary="Schéma (SDL)", response_class=PlainTextResponse)

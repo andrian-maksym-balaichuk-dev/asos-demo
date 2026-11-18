@@ -47,6 +47,7 @@ class ConnectionManager:
     def client_names(self) -> list[str]:
         return [name for name, _ in self._clients.values()]
 
+    # ── ukážka D9 ──
     async def broadcast(self, message: dict) -> int:
         """Pošle správu všetkým pripojeným klientom. Vracia počet úspešných odoslaní."""
         message = {"sent_at": now_iso(), **message}
@@ -64,6 +65,7 @@ class ConnectionManager:
                     self._clients.pop(key, None)
                 log.info("WS klient %s nedostupný, odstránený", name)
         return delivered
+    # ── /ukážka D9 ──
 
 
 manager = ConnectionManager()

@@ -37,6 +37,7 @@
     <wsdl:part name="parameters" element="tns:CheckSeatResponse"/>
   </wsdl:message>
 
+  <!-- ── ukážka B1 ── -->
   <wsdl:portType name="InventoryPortType">
     <wsdl:operation name="CheckSeat">
       <wsdl:input message="tns:CheckSeatRequest"/>
@@ -52,6 +53,7 @@
       <wsdl:output><soap:body use="literal"/></wsdl:output>
     </wsdl:operation>
   </wsdl:binding>
+  <!-- ── /ukážka B1 ── -->
 
   <wsdl:service name="InventoryService">
     <wsdl:port name="InventoryPort" binding="tns:InventorySoapBinding">

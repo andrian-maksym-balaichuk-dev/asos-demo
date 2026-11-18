@@ -25,6 +25,7 @@ python3 scripts/preflight.py      # PASS/FAIL pre všetky scenáre + reset
 | URL | Čo |
 |---|---|
 | http://localhost:8000/ | demo panel (4 karty) |
+| http://localhost:8000/code | **kód dema krok po kroku** (skutočný kód zo súborov, ◀ Späť / Ďalej ▶, šípky ← →) |
 | http://localhost:8000/docs | Swagger UI (OpenAPI), funguje offline |
 | http://localhost:8000/soap?wsdl | WSDL |
 | `localhost:50051` | gRPC `ticketflow.inventory.v1.Inventory` |

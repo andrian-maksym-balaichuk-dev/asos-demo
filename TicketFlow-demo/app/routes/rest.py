@@ -199,6 +199,9 @@ def _seat_to_json(seat) -> dict:
 # 4. POST /reservations — idempotencia + súbeh
 # ════════════════════════════════════════════════════════════════════════
 
+IDEMPOTENCY_KEY_HEADER = Header(default=None, alias="Idempotency-Key", min_length=1, max_length=255,
+                                description="Voliteľný kľúč logickej operácie (napr. UUID).")
+
 @router.post(
     "/reservations", status_code=201, response_model=ReservationOut,
     summary="Vytvor rezerváciu (PENDING)",
@@ -210,52 +213,40 @@ def _seat_to_json(seat) -> dict:
         422: {"model": Problem, "description": "IDEMPOTENCY_KEY_REUSED alebo neplatný payload"},
     },
 )
-async def create_reservation(
-    body: ReservationCreate,
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", min_length=1, max_length=255,
-                                         description="Voliteľný kľúč logickej operácie (napr. UUID)."),
-):
+# ── ukážka A3 ──
+async def create_reservation(body: ReservationCreate,
+                             idempotency_key: str | None = IDEMPOTENCY_KEY_HEADER):
     request_hash = _request_hash(body)
 
     async with engine.connect() as conn:
-        transaction = await conn.begin()
+        transaction = await conn.begin()     # return bez commitu = automatický rollback
+
+        # 1. Kľúč už bol použitý? → vráť pôvodnú odpoveď (alebo 422 pri inom payloade)
+        if idempotency_key:
+            stored = await _claim_idempotency_key(conn, idempotency_key, request_hash)
+            if stored:
+                return _replay_or_reject(stored, request_hash, idempotency_key)
+
+        # 2. Vlož PENDING rezerváciu — o súbehu rozhodne UNIQUE index v PostgreSQL
         try:
-            # 1. Zaber Idempotency-Key. Ak už existuje → replay uloženej odpovede alebo 422.
-            if idempotency_key:
-                stored = await _claim_idempotency_key(conn, idempotency_key, request_hash)
-                if stored is not None:
-                    await transaction.rollback()
-                    return _replay_or_reject(stored, request_hash, idempotency_key)
+            reservation = await _insert_pending_reservation(conn, body)
+        except IntegrityError as error:
+            return _integrity_error_to_problem(error, body)      # 409 / 404
 
-            # 2. Vlož PENDING rezerváciu. O súbehu rozhodne UNIQUE index v PostgreSQL.
-            try:
-                row = await _insert_pending_reservation(conn, body)
-            except IntegrityError as exc:
-                await transaction.rollback()
-                error_response = _integrity_error_to_problem(exc, body)
-                if error_response is None:
-                    raise
-                return error_response
+        # 3. Ulož odpoveď ku kľúču — v tej istej transakcii ako rezerváciu
+        response_json = json.dumps(reservation, ensure_ascii=False, separators=(",", ":"))
+        if idempotency_key:
+            await _store_idempotent_response(conn, idempotency_key, reservation["id"], response_json)
 
-            reservation = serialize_reservation(dict(row._mapping))
-            response_json = json.dumps(reservation, ensure_ascii=False, separators=(",", ":"))
+        # 4. Commit: rezervácia aj kľúč vzniknú naraz, alebo vôbec
+        await transaction.commit()
 
-            # 3. Ulož odpoveď ku kľúču — v tej istej transakcii ako rezerváciu
-            if idempotency_key:
-                await _store_idempotent_response(conn, idempotency_key, reservation["id"], response_json)
-
-            # 4. Commit: rezervácia aj kľúč vzniknú naraz, alebo vôbec
-            await transaction.commit()
-        except BaseException:
-            if transaction.is_active:
-                await transaction.rollback()
-            raise
-
-    # 5. WebSocket notifikácia až PO commite — klienti nevidia nič, čo by sa mohlo vrátiť
+    # 5. WebSocket notifikácia až PO commite
     await manager.broadcast({"type": "reservation.created", "reservation": reservation,
                              "correlation_id": correlation_id.get()})
     return Response(response_json, status_code=201, media_type="application/json",
                     headers={"Idempotent-Replayed": "false"})
+# ── /ukážka A3 ──
 
 
 # ── Pomocné kroky pre POST /reservations ─────────────────────────────────
@@ -266,6 +257,7 @@ def _request_hash(body: ReservationCreate) -> str:
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 
+# ── ukážka A4 ──
 async def _claim_idempotency_key(conn, key: str, request_hash: str):
     """None = kľúč je nový a patrí nám. Inak vráti uložený riadok z idempotency_keys."""
     claimed = (await conn.execute(SQL_CLAIM_IDEMPOTENCY_KEY,
@@ -284,15 +276,18 @@ def _replay_or_reject(stored, request_hash: str, key: str) -> Response:
     # vrátime PRESNE tie isté bajty ako pri prvom volaní (stĺpec response_body)
     return Response(stored.response_body, status_code=stored.response_status,
                     media_type="application/json", headers={"Idempotent-Replayed": "true"})
+# ── /ukážka A4 ──
 
 
-async def _insert_pending_reservation(conn, body: ReservationCreate):
+async def _insert_pending_reservation(conn, body: ReservationCreate) -> dict:
     params = {"event_id": body.event_id, "seat_id": body.seat_id, "buyer_id": body.buyer_id}
-    return (await conn.execute(SQL_INSERT_PENDING_RESERVATION, params)).first()
+    row = (await conn.execute(SQL_INSERT_PENDING_RESERVATION, params)).first()
+    return serialize_reservation(dict(row._mapping))
 
 
-def _integrity_error_to_problem(exc: IntegrityError, body: ReservationCreate) -> JSONResponse | None:
-    """Preloží chybu z PostgreSQL na HTTP odpoveď. None = neočakávaná chyba (propaguje sa ďalej)."""
+# ── ukážka A6 ──
+def _integrity_error_to_problem(exc: IntegrityError, body: ReservationCreate) -> JSONResponse:
+    """Preloží chybu z PostgreSQL na HTTP odpoveď. Neočakávanú chybu pošle ďalej."""
     sqlstate = getattr(exc.orig, "sqlstate", None)
     constraint = getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
 
@@ -304,7 +299,8 @@ def _integrity_error_to_problem(exc: IntegrityError, body: ReservationCreate) ->
     if sqlstate == FOREIGN_KEY_VIOLATION:
         return problem(404, "SEAT_NOT_FOUND", "Sedadlo neexistuje",
                        f"Sedadlo {body.seat_id} pre udalosť {body.event_id} neexistuje.")
-    return None
+    raise exc
+# ── /ukážka A6 ──
 
 
 async def _store_idempotent_response(conn, key: str, reservation_id: str, response_json: str) -> None:

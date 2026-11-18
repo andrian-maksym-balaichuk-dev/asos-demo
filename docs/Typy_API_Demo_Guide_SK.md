@@ -13,7 +13,7 @@ docker compose ps                  # 4 služby (healthy)
 python3 scripts/preflight.py       # musí skončiť „VŠETKO PASS“ (zároveň resetuje dáta)
 ```
 
-1. Otvor `http://localhost:8000/` (panel) a `http://localhost:8000/docs` (Swagger UI).
+1. Otvor `http://localhost:8000/` (panel), `http://localhost:8000/code` (kód krok po kroku: `?tab=A` … `?tab=D`, šípky ← →) a `http://localhost:8000/docs` (Swagger UI).
 2. Zoom 125–150 %. Pre Demo 4 klikni v karte D na **Otvoriť druhé okno ↗** a daj okná vedľa seba.
 3. Funguje to aj bez internetu. Vypni notifikácie.
 4. Každý si natrénuje svoje demo 3×. Čas meraj od otázky publiku po záverečnú vetu.

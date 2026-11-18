@@ -98,6 +98,7 @@ async def get_wsdl(wsdl: str | None = Query(default="", description="Stačí `/s
 
 @router.post("/soap", summary="SOAP operácia CheckSeat(eventId, seatId)", response_class=Response,
              openapi_extra=OPENAPI_SOAP_POST)
+# ── ukážka B2 ──
 async def soap_endpoint(request: Request):
     raw = await request.body()
 
@@ -139,6 +140,7 @@ async def soap_endpoint(request: Request):
 
     # 5. odpoveď
     return soap_response(seat)
+# ── /ukážka B2 ──
 
 
 # ── Pomocné funkcie ──────────────────────────────────────────────────────

@@ -39,6 +39,7 @@ def elapsed_ms_since(started_at: float) -> float:
 # ════════════════════════════════════════════════════════════════════════
 
 class InventoryServicer(inventory_pb2_grpc.InventoryServicer):
+    # ── ukážka B5 ──
     async def CheckSeat(self, request, context: grpc.aio.ServicerContext):
         started_at = time.perf_counter()
         correlation_id = dict(context.invocation_metadata()).get("x-correlation-id", "-")
@@ -74,6 +75,7 @@ class InventoryServicer(inventory_pb2_grpc.InventoryServicer):
         return inventory_pb2.SeatReply(event_id=seat["event_id"], seat_id=seat["seat_id"],
                                        available=seat["available"], status=seat["status"],
                                        server_elapsed_ms=server_elapsed_ms)
+    # ── /ukážka B5 ──
 
 
 # ════════════════════════════════════════════════════════════════════════

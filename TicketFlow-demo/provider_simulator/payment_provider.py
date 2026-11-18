@@ -85,10 +85,12 @@ async def _deliver(raw: bytes, signature: str | None, cid: str | None, note: str
     if cid and _CID_RE.match(cid):
         headers["X-Correlation-ID"] = cid
 
+    # ── ukážka D3 ──
     # 2. HTTP POST na príjemcu
     started_at = time.perf_counter()
     async with httpx.AsyncClient(timeout=5.0) as http:
         response = await http.post(TARGET, content=raw, headers=headers)
+    # ── /ukážka D3 ──
     elapsed_ms = round((time.perf_counter() - started_at) * 1000, 1)
 
     # 3. odpoveď príjemcu (JSON, inak text)
@@ -113,6 +115,7 @@ async def health():
     return {"status": "ok", "service": "provider"}
 
 
+# ── ukážka D2 ──
 @app.post("/simulate/payment")
 async def simulate_payment(req: SimRequest):
     global _last
@@ -120,6 +123,7 @@ async def simulate_payment(req: SimRequest):
     _last = {"raw": raw}
     return await _deliver(raw, build_header(SECRET, raw), req.correlation_id,
                           "Nová udalosť s platným HMAC podpisom.")
+# ── /ukážka D2 ──
 
 
 @app.post("/simulate/replay")

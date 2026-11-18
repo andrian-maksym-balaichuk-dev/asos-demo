@@ -56,12 +56,14 @@ SCHEMA_SQL = [
         FOREIGN KEY (event_id, seat_id) REFERENCES seats(event_id, seat_id) ON DELETE CASCADE
     )
     """,
+    # ── ukážka A5 ──
     # Čiastočný index: CANCELLED rezervácie sa nepočítajú, sedadlo sa dá znova predať
     """
     CREATE UNIQUE INDEX IF NOT EXISTS one_active_reservation_per_seat
         ON reservations (event_id, seat_id)
         WHERE status IN ('PENDING', 'CONFIRMED')
     """,
+    # ── /ukážka A5 ──
     # ═══ 3. Idempotencia REST (Demo A) a deduplikácia webhookov (Demo D) ═══
     """
     CREATE TABLE IF NOT EXISTS idempotency_keys (

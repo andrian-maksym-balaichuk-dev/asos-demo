@@ -152,9 +152,11 @@ async function seatState(seat = "A7") {
   return response.json;
 }
 
+// ── ukážka A1 ──
 function createReservation(body, idempotencyKey) {
   return api("POST", "/reservations", { body, headers: { "Idempotency-Key": idempotencyKey } });
 }
+// ── /ukážka A1 ──
 
 // Dlaždice „A7“, „Rezervácie v DB“ + SQL výpis
 function renderSeat(state) {
@@ -263,6 +265,7 @@ function renderRace(anna, boris) {
 }
 
 // Súbeh: Anna a Boris chcú to isté miesto v tom istom okamihu
+// ── ukážka A2 ──
 async function aRace() {
   // 1) čistý štart
   await aReset();
@@ -272,6 +275,7 @@ async function aRace() {
   const buy = (buyer) => createReservation(
     { event_id: "42", seat_id: "A7", buyer_id: buyer }, `race-${buyer}-${randomId()}`);
   const [anna, boris] = await Promise.all([buy("buyer-anna"), buy("buyer-boris")]);
+// ── /ukážka A2 ──
   const after = await seatState();
 
   // 3) zobraz obe odpovede: jedna 201, druhá 409
@@ -436,11 +440,13 @@ const DEMO_QUERY = '{ event(id: "42") { seats(limit: 100) { id price { amount cu
 const lastResult = { naive: null, batch: null };      // na porovnanie JSON-u
 
 // 1) Pošli query na server: POST /graphql (batching) alebo /graphql/naive
+// ── ukážka C1 ──
 async function sendGraphQL(mode, query, headers = {}) {
   const url = mode === "naive" ? "/graphql/naive" : "/graphql";
   const response = await api("POST", url, { body: { query }, headers });
   return { ...response.json, correlationId: response.cid };
 }
+// ── /ukážka C1 ──
 
 // 2) Tlačidlá „Naivný resolver“ / „Batching“
 async function cRun(mode, query = DEMO_QUERY, headers = {}) {
@@ -573,6 +579,7 @@ function setConnectedUi(client, connected) {
 }
 
 // Snapshot po pripojení: WebSocket nedoručí, čo sa stalo počas výpadku → stav si dotiahneme cez REST
+// ── ukážka D11 ──
 async function snapshot(client, reason) {
   if (!D.rid) {
     const state = await seatState();
@@ -586,6 +593,7 @@ async function snapshot(client, reason) {
   setClient(client, response.json?.status || "?", `${reason} → snapshot GET /reservations/${D.rid}`);
   log("D", { status: response.status, label: `Klient ${client.name}: snapshot po pripojení → ${response.json?.status}`, cid: response.cid });
 }
+// ── /ukážka D11 ──
 
 // Správy, ktoré server pushuje cez WebSocket
 function handleMessage(client, message) {
@@ -599,6 +607,7 @@ function handleMessage(client, message) {
   // ostatné typy (napr. hello) iba ignorujeme
 }
 
+// ── ukážka D10 ──
 function connect(client) {
   const ws = new WebSocket(wsUrl(client.name));
   client.ws = ws;
@@ -613,6 +622,7 @@ function connect(client) {
     setClient(client, null, client.wantConnected ? "Spojenie stratené" : "Odpojený — správy nedostáva");
   };
 }
+// ── /ukážka D10 ──
 
 /* ---------- Webhook: čo provider poslal a čo príjemca odpovedal ---------- */
 const RECEIVER_FIELDS = ["result", "outcome", "code", "event_id", "status_before", "status_after", "detail"];

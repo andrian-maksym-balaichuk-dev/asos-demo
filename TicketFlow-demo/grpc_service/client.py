@@ -53,6 +53,7 @@ async def close_channels() -> None:
 async def check_seat(target: str, event_id: str, seat_id: str, delay_ms: int = 0,
                      deadline_ms: int | None = None, correlation_id: str | None = None) -> dict:
     """Zavolá CheckSeat a vráti slovník pre dashboard (požiadavka, odpoveď/chyba, bajty, časy)."""
+    # ── ukážka B4 ──
     stub = inventory_pb2_grpc.InventoryStub(_channel(target))
     request = inventory_pb2.SeatRequest(event_id=event_id, seat_id=seat_id, artificial_delay_ms=delay_ms)
     metadata = (("x-correlation-id", correlation_id),) if correlation_id else None
@@ -78,6 +79,7 @@ async def check_seat(target: str, event_id: str, seat_id: str, delay_ms: int = 0
     except grpc.aio.AioRpcError as error:
         # napr. DEADLINE_EXCEEDED, NOT_FOUND, INVALID_ARGUMENT, UNAVAILABLE
         result.update({"ok": False, "code": error.code().name, "details": error.details()})
+    # ── /ukážka B4 ──
     result["client_elapsed_ms"] = round((time.perf_counter() - started_at) * 1000, 1)
     return result
 

@@ -13,7 +13,7 @@ python3 scripts/preflight.py         # očakávaj: „VŠETKO PASS — môžeš 
 Preflight na konci resetuje dáta (A7 VOĽNÉ, ďalšia rezervácia bude `r-001`) a zapíše
 `docs/SCREENSHOTS/preflight_last_run.json` + `docs/SCREENSHOTS/fallback.html`.
 
-- Otvor `http://localhost:8000/` (panel) a `http://localhost:8000/docs` (Swagger UI).
+- Otvor `http://localhost:8000/` (panel), `http://localhost:8000/code` (kód krok po kroku) a `http://localhost:8000/docs` (Swagger UI).
 - Zoom prehliadača 125–150 %. Pre Demo D otvor druhé okno: odkaz **„Otvoriť klienta v novom okne ↗“** (`/?tab=D&solo=B`) a daj okná vedľa seba.
 - Funguje to bez internetu (Swagger UI assets sú lokálne). Po builde môžeš Wi-Fi vypnúť.
 - Pred každým demom stlač **Reset** (alebo `python3 scripts/reset_demo.py`).

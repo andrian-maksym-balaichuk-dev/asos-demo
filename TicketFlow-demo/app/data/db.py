@@ -34,11 +34,13 @@ QUERY_LOG_KEY = "ticketflow_query_log"
 MAX_LOGGED_PARAMS = 12
 
 
+# ── ukážka C6 ──
 @event.listens_for(engine.sync_engine, "before_cursor_execute")
 def _record_statement(conn, cursor, statement, parameters, context, executemany):  # noqa: ARG001
     query_log = conn.info.get(QUERY_LOG_KEY)
     if query_log is not None:
         query_log.append({"sql": " ".join(statement.split()), "params": _safe_params(parameters)})
+# ── /ukážka C6 ──
 
 
 def _safe_params(parameters: Any) -> Any:
@@ -51,6 +53,7 @@ def _safe_params(parameters: Any) -> Any:
     return str(parameters)
 
 
+# ── ukážka C7 ──
 @asynccontextmanager
 async def recorded_connection():
     """Spojenie v AUTOCOMMIT režime (žiadny implicitný BEGIN) s vlastným SQL logom."""
@@ -63,6 +66,7 @@ async def recorded_connection():
         finally:
             # spojenie sa vracia do poolu → log musí zmiznúť, inak by počítal cudzie dotazy
             conn.sync_connection.info.pop(QUERY_LOG_KEY, None)
+# ── /ukážka C7 ──
 
 
 # ════════════════════════════════════════════════════════════════════════

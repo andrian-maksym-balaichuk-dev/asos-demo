@@ -55,12 +55,14 @@ SIGNATURE_ERRORS = {
 
 # Deduplikácia: PRIMARY KEY event_id + ON CONFLICT DO NOTHING.
 # Prázdny RETURNING = túto udalosť sme už spracovali.
+# ── ukážka D6 ──
 SQL_MARK_EVENT_RECEIVED = text("""
     INSERT INTO processed_webhook_events (event_id, event_type, reservation_id, outcome)
     VALUES (:event_id, :event_type, :reservation_id, 'processing')
     ON CONFLICT (event_id) DO NOTHING
     RETURNING event_id
 """)
+# ── /ukážka D6 ──
 
 SQL_FIRST_PROCESSING = text("""
     SELECT outcome, received_at
@@ -96,6 +98,7 @@ SQL_SET_OUTCOME = text("""
 # ════════════════════════════════════════════════════════════════════════
 
 @router.post("/webhooks/payment", summary="Príjem podpísaného webhooku od payment providera")
+# ── ukážka D4 ──
 async def receive_payment_webhook(request: Request):
     raw_body = await request.body()
     if len(raw_body) > MAX_BODY:
@@ -108,6 +111,7 @@ async def receive_payment_webhook(request: Request):
     if not verification.ok:
         status, detail = SIGNATURE_ERRORS[verification.reason]
         return _reject(status, verification.reason, detail)
+# ── /ukážka D4 ──
 
     # 2. Parsuj a validuj JSON (podpis sedí, ale obsahu ešte neveríme naslepo)
     parsed = _parse_event(raw_body)
@@ -115,6 +119,7 @@ async def receive_payment_webhook(request: Request):
         return parsed
     event_id, event_type, reservation_id = parsed
 
+    # ── ukážka D7 ──
     # 3. Deduplikácia + PENDING → CONFIRMED v JEDNEJ transakcii
     async with engine.begin() as conn:
         first_time = (await conn.execute(SQL_MARK_EVENT_RECEIVED, {
@@ -126,13 +131,16 @@ async def receive_payment_webhook(request: Request):
         status_before, confirmed, outcome = await _apply_payment_event(conn, event_type, reservation_id)
         await conn.execute(SQL_SET_OUTCOME, {"outcome": outcome, "event_id": event_id})
     status_after = confirmed["status"] if confirmed else status_before
+    # ── /ukážka D7 ──
 
+    # ── ukážka D8 ──
     # 4. Transakcia je COMMITnutá → až teraz WebSocket
     delivered = None
     if confirmed:
         delivered = await manager.broadcast({
             "type": "reservation.confirmed", "reservation": confirmed,
             "webhook_event_id": event_id, "correlation_id": correlation_id.get()})
+    # ── /ukážka D8 ──
 
     log.info("webhook %s spracovaný: %s", event_id, outcome)
     return JSONResponse({

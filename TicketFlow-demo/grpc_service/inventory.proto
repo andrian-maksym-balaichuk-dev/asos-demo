@@ -8,6 +8,7 @@ syntax = "proto3";
 
 package ticketflow.inventory.v1;
 
+// ── ukážka B3 ──
 service Inventory {
   // Unary RPC. Deadline si nastavuje KLIENT (napr. 200 ms).
   rpc CheckSeat (SeatRequest) returns (SeatReply);
@@ -26,3 +27,4 @@ message SeatReply {
   string status = 4;              // FREE | PENDING | CONFIRMED
   uint32 server_elapsed_ms = 5;   // koľko trvala práca na serveri (nie deadline klienta)
 }
+// ── /ukážka B3 ──

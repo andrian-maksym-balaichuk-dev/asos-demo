@@ -18,6 +18,7 @@ SIGNATURE_HEADER = "TicketFlow-Signature"
 # 1. Strana providera — vytvorenie podpisu
 # ════════════════════════════════════════════════════════════════════════
 
+# ── ukážka D1 ──
 def compute_signature(secret: bytes, timestamp: int, raw_body: bytes) -> str:
     # timestamp je súčasťou podpísaných dát → útočník ho nemôže posunúť
     return hmac.new(secret, f"{timestamp}.".encode() + raw_body, hashlib.sha256).hexdigest()
@@ -26,6 +27,7 @@ def compute_signature(secret: bytes, timestamp: int, raw_body: bytes) -> str:
 def build_header(secret: bytes, raw_body: bytes, timestamp: int | None = None) -> str:
     ts = int(time.time()) if timestamp is None else timestamp
     return f"t={ts},v1={compute_signature(secret, ts, raw_body)}"
+# ── /ukážka D1 ──
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -39,6 +41,7 @@ class Verification:
     timestamp: int | None = None
 
 
+# ── ukážka D5 ──
 def verify(secret: bytes, raw_body: bytes, header: str | None, tolerance_s: int,
            now: int | None = None) -> Verification:
     # 1. hlavička musí existovať
@@ -60,6 +63,7 @@ def verify(secret: bytes, raw_body: bytes, header: str | None, tolerance_s: int,
     if any(hmac.compare_digest(expected, candidate) for candidate in signatures):
         return Verification(True, "OK", timestamp)
     return Verification(False, "INVALID_SIGNATURE", timestamp)
+# ── /ukážka D5 ──
 
 
 def _parse_header(header: str) -> tuple[int | None, list[str]]:
