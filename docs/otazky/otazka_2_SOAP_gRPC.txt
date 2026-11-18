@@ -1,0 +1,9 @@
+Meno: <meno a priezvisko>
+AIS ID: <AIS ID>
+Téma: Typy API
+Otázka: gRPC klient zavolá metódu s deadline 200 ms, ale server požiadavku spracúva 800 ms. Ktoré tvrdenie je pravdivé?
+Odpovede:
++ klient dostane DEADLINE_EXCEEDED, no operácia na serveri už mohla byť čiastočne alebo úplne vykonaná
+- klient dostane DEADLINE_EXCEEDED a server automaticky vráti späť (rollback) všetky vykonané zmeny
+- klient počká, kým server prácu dokončí, a dostane odpoveď so stavom OK
+- gRPC runtime automaticky zopakuje volanie s dvojnásobným deadline

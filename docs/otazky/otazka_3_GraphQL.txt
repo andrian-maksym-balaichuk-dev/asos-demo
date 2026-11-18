@@ -1,0 +1,9 @@
+Meno: <meno a priezvisko>
+AIS ID: <AIS ID>
+Téma: Typy API
+Otázka: Prečo sa DataLoader v GraphQL serveri vytvára nový pre každý request, a nie jeden zdieľaný pre celú aplikáciu?
+Odpovede:
++ aby sa cache načítaných dát jedného používateľa nedostala k inému používateľovi s inými oprávneniami
+- aby sa znížil celkový počet SQL dotazov naprieč všetkými requestami
+- pretože špecifikácia GraphQL zakazuje zdieľať objekty medzi requestami
+- pretože zdieľaný DataLoader by vypol obmedzenie hĺbky query

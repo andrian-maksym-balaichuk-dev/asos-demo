@@ -1,0 +1,9 @@
+Meno: <meno a priezvisko>
+AIS ID: <AIS ID>
+Téma: Typy API
+Otázka: Dvaja rôzni kupujúci pošlú v tom istom okamihu POST /reservations na to isté sedadlo, každý s vlastným Idempotency-Key. Čo zaručí, že vznikne iba jedna rezervácia?
+Odpovede:
++ unikátne obmedzenie alebo atomický podmienený zápis v databáze
+- Idempotency-Key, pretože server odmietne druhú požiadavku na to isté sedadlo
+- použitie metódy PUT namiesto POST, pretože PUT je idempotentná
+- kratší timeout na strane klienta, aby sa požiadavky neprekrývali
