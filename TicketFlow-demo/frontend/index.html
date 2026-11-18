@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="sk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TicketFlow API Showcase</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="top">
+  <h1>TicketFlow <span class="muted">· koncert 42 · miesto A7</span></h1>
+  <div class="health" id="health">
+    <span class="chip" data-dep="db">PostgreSQL …</span>
+    <span class="chip" data-dep="grpc">gRPC …</span>
+    <span class="chip" data-dep="provider">Provider …</span>
+    <a class="chip" href="/docs" target="_blank" rel="noopener">Swagger ↗</a>
+  </div>
+</header>
+<div id="offline-banner">API nebeží → <code>docker compose up -d</code> alebo náhradná ukážka <code>docs/SCREENSHOTS/fallback.html</code></div>
+
+<nav class="tabs" role="tablist">
+  <button role="tab" data-tab="A" aria-selected="true"><span class="dot" style="background:var(--blue)"></span>A · REST</button>
+  <button role="tab" data-tab="B" aria-selected="false"><span class="dot" style="background:var(--purple)"></span>B · SOAP &amp; gRPC</button>
+  <button role="tab" data-tab="C" aria-selected="false"><span class="dot" style="background:var(--teal)"></span>C · GraphQL</button>
+  <button role="tab" data-tab="D" aria-selected="false"><span class="dot" style="background:var(--orange)"></span>D · Webhook &amp; WS</button>
+</nav>
+
+<main>
+<!-- ================= DEMO A ================= -->
+<section class="panel active" data-demo="A">
+  <div class="lead"><h2>REST: retry vs. súbeh</h2><span class="point">Rovnaký retry ≠ nový nákup · súbeh = 1 víťaz</span></div>
+  <div class="grid">
+    <div class="card buttons">
+      <button class="btn ghost" data-action="a-reset">Reset</button>
+      <button class="btn" data-action="a-create">Vytvoriť rezerváciu</button>
+      <button class="btn secondary" data-action="a-retry">Zopakovať request</button>
+      <button class="btn" data-action="a-race">Spustiť súbeh</button>
+      <button class="btn ghost" data-action="a-mismatch">Rovnaký kľúč, iný payload</button>
+    </div>
+    <div>
+      <div class="tiles">
+        <div class="tile accent"><div class="label">A7</div><div class="big" id="a-seat">—</div></div>
+        <div class="tile"><div class="label">Rezervácie A7 v DB</div><div class="big" id="a-count">—</div></div>
+        <div class="tile"><div class="label">reservation_id</div><div class="big" id="a-rid">—</div></div>
+      </div>
+      <div class="card result" id="a-result"><span class="muted">—</span></div>
+      <div class="card"><h3>SQL</h3><pre id="a-sql">—</pre></div>
+      <details class="card"><summary>Log</summary><ul class="log" id="log-A"></ul></details>
+    </div>
+  </div>
+</section>
+
+<!-- ================= DEMO B ================= -->
+<section class="panel" data-demo="B">
+  <div class="lead"><h2>SOAP a gRPC</h2><span class="point">Formálny kontrakt a reálny deadline</span></div>
+  <div class="subtabs" role="tablist">
+    <button data-sub="soap" aria-selected="true">SOAP</button>
+    <button data-sub="grpc" aria-selected="false">gRPC</button>
+  </div>
+  <div class="grid" id="sub-soap">
+    <div class="card buttons">
+      <button class="btn secondary" data-action="b-wsdl">Zobraziť WSDL</button>
+      <button class="btn" data-action="b-soap">CheckSeat(42, A7)</button>
+      <button class="btn ghost" data-action="b-soap-fault">Neplatný request → Fault</button>
+    </div>
+    <div>
+      <div class="card result" id="b-soap-result"><span class="muted">—</span></div>
+      <div class="split">
+        <div class="card"><h3 id="b-left-title">Request</h3><pre class="tall" id="b-left">—</pre></div>
+        <div class="card"><h3 id="b-right-title">Response</h3><pre class="tall" id="b-right">—</pre></div>
+      </div>
+    </div>
+  </div>
+  <div class="grid" id="sub-grpc" hidden>
+    <div>
+      <div class="card buttons">
+        <button class="btn" data-action="b-grpc">CheckSeat(42, A7)</button>
+        <button class="btn secondary" data-action="b-grpc-slow">Pomalý server 800 ms · deadline 200 ms</button>
+        <button class="btn ghost" data-action="b-grpc-ok-slow">Server 100 ms · deadline 2000 ms</button>
+      </div>
+      <details class="card"><summary>inventory.proto</summary><pre class="tall" id="b-proto">—</pre></details>
+    </div>
+    <div>
+      <div class="card result" id="b-grpc-result"><span class="muted">—</span></div>
+      <div class="card"><h3>Čas ≠ timeout</h3><div id="b-timeline" class="muted small">—</div></div>
+      <div class="card"><h3>Bajty</h3><div id="b-bytes" class="small"></div></div>
+    </div>
+  </div>
+  <details class="card"><summary>Log</summary><ul class="log" id="log-B"></ul></details>
+</section>
+
+<!-- ================= DEMO C ================= -->
+<section class="panel" data-demo="C">
+  <div class="lead"><h2>GraphQL: N+1</h2><span class="point">Rovnaký JSON, 101 vs 2 skutočné SQL dotazy</span></div>
+  <div class="grid">
+    <div>
+      <div class="card buttons">
+        <button class="btn secondary" data-action="c-naive">Naivný resolver</button>
+        <button class="btn" data-action="c-batch">Batching (DataLoader)</button>
+        <button class="btn ghost" data-action="c-limit">limit: 500 → zamietnuté</button>
+        <button class="btn ghost" data-action="c-priv">internalCost bez roly</button>
+      </div>
+      <div class="card"><h3>Query</h3><pre id="c-query">{ event(id: "42") {
+  seats(limit: 100) {
+    id
+    price { amount currency }
+  }
+} }</pre></div>
+    </div>
+    <div>
+      <div class="tiles">
+        <div class="tile accent"><div class="label">SQL naivne</div><div class="huge" id="c-naive-count">—</div><div class="small muted" id="c-naive-ms"></div></div>
+        <div class="tile accent"><div class="label">SQL batching</div><div class="huge" id="c-batch-count">—</div><div class="small muted" id="c-batch-ms"></div></div>
+        <div class="tile"><div class="label">JSON zhodný</div><div class="big" id="c-same">—</div></div>
+      </div>
+      <div class="card result" id="c-result" hidden></div>
+      <div class="split">
+        <div class="card"><h3>SQL log · naivne</h3><pre id="c-naive-log">—</pre></div>
+        <div class="card"><h3>SQL log · batching</h3><pre id="c-batch-log">—</pre></div>
+      </div>
+      <details class="card"><summary>Log</summary><ul class="log" id="log-C"></ul></details>
+    </div>
+  </div>
+</section>
+
+<!-- ================= DEMO D ================= -->
+<section class="panel" data-demo="D">
+  <div class="lead"><h2>Webhook → DB → WebSocket</h2><span class="point">Podpis, dedupe, 2 okná, reconnect</span></div>
+  <div class="grid">
+    <div>
+      <div class="card buttons">
+        <button class="btn" data-action="d-create">Vytvoriť PENDING</button>
+        <button class="btn secondary" data-action="d-bad">Pokaziť podpis</button>
+        <button class="btn" data-action="d-pay">Odoslať platbu</button>
+        <button class="btn secondary" data-action="d-replay">Zopakovať webhook</button>
+        <button class="btn ghost" data-action="d-unsigned">Bez podpisu</button>
+      </div>
+      <div class="card small"><a id="d-open-second" href="/?tab=D&amp;solo=C" target="_blank" rel="noopener">Otvoriť druhé okno ↗</a></div>
+    </div>
+    <div>
+      <div class="clients" id="d-clients"></div>
+      <div class="card result" id="d-result"><span class="muted">—</span></div>
+      <div class="split">
+        <div class="card"><h3>Provider poslal</h3><pre id="d-sent">—</pre></div>
+        <div class="card"><h3>Príjemca odpovedal</h3><pre id="d-recv">—</pre></div>
+      </div>
+      <details class="card"><summary>Log</summary><ul class="log" id="log-D"></ul></details>
+    </div>
+  </div>
+</section>
+</main>
+<script src="/static/app.js"></script>
+</body>
+</html>

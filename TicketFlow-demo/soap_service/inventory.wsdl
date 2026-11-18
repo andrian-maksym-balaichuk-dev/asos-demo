@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Demo B — SOAP 1.1, document/literal, operácia CheckSeat(eventId, seatId). -->
+<wsdl:definitions name="TicketFlowInventory"
+    targetNamespace="urn:ticketflow:inventory:v1"
+    xmlns:tns="urn:ticketflow:inventory:v1"
+    xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/"
+    xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+
+  <wsdl:types>
+    <xsd:schema targetNamespace="urn:ticketflow:inventory:v1" elementFormDefault="qualified">
+      <xsd:element name="CheckSeat">
+        <xsd:complexType>
+          <xsd:sequence>
+            <xsd:element name="eventId" type="xsd:string"/>
+            <xsd:element name="seatId" type="xsd:string"/>
+          </xsd:sequence>
+        </xsd:complexType>
+      </xsd:element>
+      <xsd:element name="CheckSeatResponse">
+        <xsd:complexType>
+          <xsd:sequence>
+            <xsd:element name="eventId" type="xsd:string"/>
+            <xsd:element name="seatId" type="xsd:string"/>
+            <xsd:element name="available" type="xsd:boolean"/>
+            <xsd:element name="status" type="xsd:string"/>
+          </xsd:sequence>
+        </xsd:complexType>
+      </xsd:element>
+    </xsd:schema>
+  </wsdl:types>
+
+  <wsdl:message name="CheckSeatRequest">
+    <wsdl:part name="parameters" element="tns:CheckSeat"/>
+  </wsdl:message>
+  <wsdl:message name="CheckSeatResponse">
+    <wsdl:part name="parameters" element="tns:CheckSeatResponse"/>
+  </wsdl:message>
+
+  <wsdl:portType name="InventoryPortType">
+    <wsdl:operation name="CheckSeat">
+      <wsdl:input message="tns:CheckSeatRequest"/>
+      <wsdl:output message="tns:CheckSeatResponse"/>
+    </wsdl:operation>
+  </wsdl:portType>
+
+  <wsdl:binding name="InventorySoapBinding" type="tns:InventoryPortType">
+    <soap:binding style="document" transport="http://schemas.xmlsoap.org/soap/http"/>
+    <wsdl:operation name="CheckSeat">
+      <soap:operation soapAction="urn:ticketflow:inventory:v1#CheckSeat"/>
+      <wsdl:input><soap:body use="literal"/></wsdl:input>
+      <wsdl:output><soap:body use="literal"/></wsdl:output>
+    </wsdl:operation>
+  </wsdl:binding>
+
+  <wsdl:service name="InventoryService">
+    <wsdl:port name="InventoryPort" binding="tns:InventorySoapBinding">
+      <soap:address location="__SOAP_ADDRESS__"/>
+    </wsdl:port>
+  </wsdl:service>
+</wsdl:definitions>

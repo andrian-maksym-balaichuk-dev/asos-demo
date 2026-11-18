@@ -1,0 +1,475 @@
+{
+  "recorded_at": "2026-11-18T20:09:13+01:00",
+  "base_url": "http://localhost:8000",
+  "results": [
+    {
+      "scenario": "Služby a healthchecky",
+      "pass": true,
+      "checks": [
+        {
+          "ok": true,
+          "what": "API http://localhost:8000 odpovedá",
+          "why_fail": ""
+        },
+        {
+          "ok": true,
+          "what": "PostgreSQL dostupná",
+          "why_fail": ""
+        },
+        {
+          "ok": true,
+          "what": "gRPC Inventory SERVING",
+          "why_fail": ""
+        },
+        {
+          "ok": true,
+          "what": "Payment provider simulátor",
+          "why_fail": ""
+        },
+        {
+          "ok": true,
+          "what": "Swagger UI /docs",
+          "why_fail": ""
+        },
+        {
+          "ok": true,
+          "what": "Swagger UI assets lokálne (funguje offline)",
+          "why_fail": ""
+        }
+      ],
+      "evidence": {
+        "ok": true,
+        "db": "ok",
+        "grpc": "SERVING",
+        "provider": "ok"
+      }
+    },
+    {
+      "scenario": "Demo A — REST: retry a súbeh",
+      "pass": true,
+      "checks": [
+        {
+          "ok": true,
+          "what": "vytvorenie → 201",
+          "why_fail": ""
+        },
+        {
+          "ok": true,
+          "what": "retry s rovnakým kľúčom → rovnaké reservation_id",
+          "why_fail": ""
+        },
+        {
+          "ok": true,
+          "what": "po retry je v DB 1 aktívna rezervácia",
+          "why_fail": ""
+        },
+        {
+          "ok": true,
+          "what": "rovnaký kľúč + iný payload → 422",
+          "why_fail": ""
+        },
+        {
+          "ok": true,
+          "what": "súbeh: jeden 201, druhý 409",
+          "why_fail": ""
+        },
+        {
+          "ok": true,
+          "what": "súbeh: v DB presne 1 aktívna rezervácia",
+          "why_fail": ""
+        }
+      ],
+      "evidence": {
+        "retry": {
+          "first": {
+            "id": "r-001",
+            "event_id": "42",
+            "seat_id": "A7",
+            "buyer_id": "buyer-anna",
+            "status": "PENDING",
+            "created_at": "2026-11-18T19:09:13.668963+00:00",
+            "updated_at": "2026-11-18T19:09:13.668963+00:00"
+          },
+          "second": {
+            "id": "r-001",
+            "event_id": "42",
+            "seat_id": "A7",
+            "buyer_id": "buyer-anna",
+            "status": "PENDING",
+            "created_at": "2026-11-18T19:09:13.668963+00:00",
+            "updated_at": "2026-11-18T19:09:13.668963+00:00"
+          },
+          "replayed": "true"
+        },
+        "mismatch": {
+          "type": "https://ticketflow.local/problems/idempotency_key_reused",
+          "title": "Kľúč už bol použitý s iným payloadom",
+          "status": 422,
+          "code": "IDEMPOTENCY_KEY_REUSED",
+          "detail": "Rovnaký Idempotency-Key s iným telom požiadavky je chyba klienta. Nič sa nezmenilo.",
+          "correlation_id": "cid-5f8df7820f7a",
+          "timestamp": "2026-11-18T19:09:13.676+00:00"
+        },
+        "race": {
+          "buyer-boris": {
+            "status": 201,
+            "body": {
+              "id": "r-001",
+              "event_id": "42",
+              "seat_id": "A7",
+              "buyer_id": "buyer-boris",
+              "status": "PENDING",
+              "created_at": "2026-11-18T19:09:13.698489+00:00",
+              "updated_at": "2026-11-18T19:09:13.698489+00:00"
+            }
+          },
+          "buyer-anna": {
+            "status": 409,
+            "body": {
+              "type": "https://ticketflow.local/problems/seat_taken",
+              "title": "Sedadlo je obsadené",
+              "status": 409,
+              "code": "SEAT_TAKEN",
+              "detail": "Sedadlo A7 už má aktívnu rezerváciu. Rozhodol PostgreSQL UNIQUE index one_active_reservation_per_seat.",
+              "correlation_id": "cid-4a68217ed653",
+              "timestamp": "2026-11-18T19:09:13.699+00:00",
+              "constraint": "one_active_reservation_per_seat"
+            }
+          }
+        },
+        "db": {
+          "seat": {
+            "event_id": "42",
+            "seat_id": "A7",
+            "available": false,
+            "status": "PENDING",
+            "reservation_id": "r-001"
+          },
+          "active_reservations": [
+            {
+              "id": "r-001",
+              "buyer_id": "buyer-boris",
+              "status": "PENDING",
+              "created_at": "2026-11-18T19:09:13.698489+00:00"
+            }
+          ],
+          "active_count": 1,
+          "sql": "SELECT id, buyer_id, status, created_at FROM reservations WHERE event_id = '42' AND seat_id = 'A7' AND status IN ('PENDING', 'CONFIRMED')",
+          "at": "2026-11-18T19:09:13.701+00:00"
+        }
+      }
+    },
+    {
+      "scenario": "Demo B — SOAP/WSDL a gRPC deadline",
+      "pass": true,
+      "checks": [
+        {
+          "ok": true,
+          "what": "WSDL obsahuje operáciu CheckSeat",
+          "why_fail": ""
+        },
+        {
+          "ok": true,
+          "what": "SOAP CheckSeat(42, A7) → available=true",
+          "why_fail": ""
+        },
+        {
+          "ok": true,
+          "what": "neplatný SOAP request → SOAP Fault",
+          "why_fail": ""
+        },
+        {
+          "ok": true,
+          "what": "gRPC CheckSeat → OK, available=true",
+          "why_fail": ""
+        },
+        {
+          "ok": true,
+          "what": "gRPC 800 ms delay + 200 ms deadline → DEADLINE_EXCEEDED",
+          "why_fail": ""
+        },
+        {
+          "ok": true,
+          "what": "klient skončil pri deadline (203.7 ms)",
+          "why_fail": ""
+        }
+      ],
+      "evidence": {
+        "soap": {
+          "endpoint": "http://127.0.0.1:8000/soap",
+          "http_status": 200,
+          "is_fault": false,
+          "request_xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"\n               xmlns:tns=\"urn:ticketflow:inventory:v1\">\n  <soap:Body>\n    <tns:CheckSeat>\n      <tns:eventId>42</tns:eventId>\n      <tns:seatId>A7</tns:seatId>\n    </tns:CheckSeat>\n  </soap:Body>\n</soap:Envelope>\n",
+          "response_xml": "<?xml version='1.0' encoding='UTF-8'?>\n<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:tns=\"urn:ticketflow:inventory:v1\">\n  <soap:Body>\n    <tns:CheckSeatResponse>\n      <tns:eventId>42</tns:eventId>\n      <tns:seatId>A7</tns:seatId>\n      <tns:available>true</tns:available>\n      <tns:status>FREE</tns:status>\n    </tns:CheckSeatResponse>\n  </soap:Body>\n</soap:Envelope>\n",
+          "request_body_bytes": 322,
+          "response_body_bytes": 401,
+          "client_elapsed_ms": 5.0,
+          "at": "2026-11-18T19:09:13.725+00:00",
+          "correlation_id": "cid-d82c3910dac6",
+          "bytes_note": "Merané: veľkosť HTTP body (XML Envelope), bez HTTP hlavičiek."
+        },
+        "soap_fault": {
+          "endpoint": "http://127.0.0.1:8000/soap",
+          "http_status": 500,
+          "is_fault": true,
+          "request_xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"\n               xmlns:tns=\"urn:ticketflow:inventory:v1\">\n  <soap:Body>\n    <tns:CheckSeat>\n      <tns:eventId>42</tns:eventId>\n    </tns:CheckSeat>\n  </soap:Body>\n</soap:Envelope>\n",
+          "response_xml": "<?xml version='1.0' encoding='UTF-8'?>\n<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:tns=\"urn:ticketflow:inventory:v1\">\n  <soap:Body>\n    <soap:Fault>\n      <faultcode>soap:Client</faultcode>\n      <faultstring>Chýba povinný element seatId.</faultstring>\n      <detail>\n        <tns:errorCode>MISSING_ELEMENT</tns:errorCode>\n      </detail>\n    </soap:Fault>\n  </soap:Body>\n</soap:Envelope>\n",
+          "request_body_bytes": 288,
+          "response_body_bytes": 423,
+          "client_elapsed_ms": 4.2,
+          "at": "2026-11-18T19:09:13.730+00:00",
+          "correlation_id": "cid-0cc006273f8e",
+          "bytes_note": "Merané: veľkosť HTTP body (XML Envelope), bez HTTP hlavičiek."
+        },
+        "grpc_ok": {
+          "target": "grpc:50051",
+          "method": "/ticketflow.inventory.v1.Inventory/CheckSeat",
+          "request": {
+            "event_id": "42",
+            "seat_id": "A7",
+            "artificial_delay_ms": 0
+          },
+          "deadline_ms": null,
+          "request_protobuf_bytes": 8,
+          "ok": true,
+          "code": "OK",
+          "reply": {
+            "event_id": "42",
+            "seat_id": "A7",
+            "available": true,
+            "status": "FREE",
+            "server_elapsed_ms": 0
+          },
+          "response_protobuf_bytes": 16,
+          "client_elapsed_ms": 1.5,
+          "at": "2026-11-18T19:09:13.733+00:00",
+          "correlation_id": "cid-a92953abdbda",
+          "bytes_note": "Merané: veľkosť serializovanej protobuf správy (bez HTTP/2 rámcov, bez 5 B gRPC prefixu a hlavičiek)."
+        },
+        "grpc_deadline": {
+          "target": "grpc:50051",
+          "method": "/ticketflow.inventory.v1.Inventory/CheckSeat",
+          "request": {
+            "event_id": "42",
+            "seat_id": "A7",
+            "artificial_delay_ms": 800
+          },
+          "deadline_ms": 200,
+          "request_protobuf_bytes": 11,
+          "ok": false,
+          "code": "DEADLINE_EXCEEDED",
+          "details": "Deadline Exceeded",
+          "client_elapsed_ms": 203.7,
+          "at": "2026-11-18T19:09:13.937+00:00",
+          "correlation_id": "cid-bf23a4d5b14a",
+          "bytes_note": "Merané: veľkosť serializovanej protobuf správy (bez HTTP/2 rámcov, bez 5 B gRPC prefixu a hlavičiek)."
+        }
+      }
+    },
+    {
+      "scenario": "Demo C — GraphQL 101 vs 2 SQL",
+      "pass": true,
+      "checks": [
+        {
+          "ok": true,
+          "what": "obe query bez chýb",
+          "why_fail": ""
+        },
+        {
+          "ok": true,
+          "what": "rovnaký JSON, 100 sedadiel",
+          "why_fail": ""
+        },
+        {
+          "ok": true,
+          "what": "naivne: 101 skutočných SQL dotazov (očakávané 101)",
+          "why_fail": ""
+        },
+        {
+          "ok": true,
+          "what": "batching: 2 skutočné SQL dotazy (očakávané 2)",
+          "why_fail": ""
+        },
+        {
+          "ok": true,
+          "what": "limit 500 zamietnutý",
+          "why_fail": ""
+        }
+      ],
+      "evidence": {
+        "naive_count": 101,
+        "batch_count": 2,
+        "naive_first_sql": [
+          {
+            "sql": "SELECT seat_id, row_label, seat_number FROM seats WHERE event_id = %(event_id)s ORDER BY row_label, seat_number LIMIT %(limit)s",
+            "params": {
+              "event_id": "42",
+              "limit": 100
+            }
+          },
+          {
+            "sql": "SELECT seat_id, amount_cents, currency, internal_cost_cents FROM prices WHERE event_id = %(event_id)s AND seat_id = %(seat_id)s",
+            "params": {
+              "event_id": "42",
+              "seat_id": "A1"
+            }
+          },
+          {
+            "sql": "SELECT seat_id, amount_cents, currency, internal_cost_cents FROM prices WHERE event_id = %(event_id)s AND seat_id = %(seat_id)s",
+            "params": {
+              "event_id": "42",
+              "seat_id": "A2"
+            }
+          }
+        ],
+        "batch_sql": [
+          "SELECT seat_id, row_label, seat_number FROM seats WHERE event_id = %(event_id)s ORDER BY row_label, seat_number LIMIT %(limit)s",
+          "SELECT seat_id, amount_cents, currency, internal_cost_cents FROM prices WHERE event_id = %(event_id)s AND seat_id IN (%(seat_ids_1)s, %(seat_ids_2)s, %(seat_ids_3)s, %(seat_ids_4)s, %(seat_ids_5)s, %(seat_ids_6)s, %(seat"
+        ],
+        "naive_ms": 16.3,
+        "batch_ms": 4.1,
+        "sample": [
+          {
+            "id": "A1",
+            "price": {
+              "amount": 59.0,
+              "currency": "EUR"
+            }
+          },
+          {
+            "id": "A2",
+            "price": {
+              "amount": 59.0,
+              "currency": "EUR"
+            }
+          },
+          {
+            "id": "A3",
+            "price": {
+              "amount": 59.0,
+              "currency": "EUR"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "scenario": "Demo D — webhook, dedupe, WebSocket, reconnect",
+      "pass": true,
+      "checks": [
+        {
+          "ok": true,
+          "what": "unsigned: 400 a stav ostal PENDING",
+          "why_fail": ""
+        },
+        {
+          "ok": true,
+          "what": "bad-signature: 401 a stav ostal PENDING",
+          "why_fail": ""
+        },
+        {
+          "ok": true,
+          "what": "platný podpis: PENDING → CONFIRMED",
+          "why_fail": ""
+        },
+        {
+          "ok": true,
+          "what": "2 WebSocket klienti dostali potvrdenie",
+          "why_fail": ""
+        },
+        {
+          "ok": true,
+          "what": "duplicitný webhook → DUPLICATE_IGNORED",
+          "why_fail": ""
+        },
+        {
+          "ok": true,
+          "what": "reconnect: snapshot GET /reservations/{id} = CONFIRMED",
+          "why_fail": ""
+        }
+      ],
+      "evidence": {
+        "reservation_id": "r-001",
+        "unsigned": {
+          "status": 400,
+          "body": {
+            "type": "https://ticketflow.local/problems/missing_signature",
+            "title": "Webhook odmietnutý",
+            "status": 400,
+            "code": "MISSING_SIGNATURE",
+            "detail": "Chýba hlavička TicketFlow-Signature.",
+            "correlation_id": "cid-39862fa83428",
+            "timestamp": "2026-11-18T19:09:14.025+00:00",
+            "db_changed": false
+          }
+        },
+        "bad-signature": {
+          "status": 401,
+          "body": {
+            "type": "https://ticketflow.local/problems/invalid_signature",
+            "title": "Webhook odmietnutý",
+            "status": 401,
+            "code": "INVALID_SIGNATURE",
+            "detail": "HMAC podpis nesedí s raw body. Databáza sa nezmenila.",
+            "correlation_id": "cid-e9b33c7bea10",
+            "timestamp": "2026-11-18T19:09:14.039+00:00",
+            "db_changed": false
+          }
+        },
+        "payment": {
+          "note": "Nová udalosť s platným HMAC podpisom.",
+          "sent": {
+            "url": "http://api:8000/webhooks/payment",
+            "headers": {
+              "Content-Type": "application/json",
+              "TicketFlow-Signature": "t=1795028954,v1=5641d250c3b917eeb62f3f79ae7ee1b6ea6649289c9c92a9d94fa687b172031f",
+              "X-Correlation-ID": "cid-8502abfa6f30"
+            },
+            "raw_body": "{\"id\":\"evt_182f4d464390ccf3\",\"type\":\"payment.succeeded\",\"created\":1795028954,\"data\":{\"reservation_id\":\"r-001\",\"payment_id\":\"pay_cb425220280b\",\"amount_cents\":5900,\"currency\":\"EUR\"}}"
+          },
+          "received": {
+            "status": 200,
+            "body": {
+              "result": "PROCESSED",
+              "outcome": "CONFIRMED",
+              "event_id": "evt_182f4d464390ccf3",
+              "reservation_id": "r-001",
+              "status_before": "PENDING",
+              "status_after": "CONFIRMED",
+              "signature": "VALID",
+              "websocket_deliveries": 2,
+              "correlation_id": "cid-8502abfa6f30"
+            }
+          },
+          "elapsed_ms": 6.2,
+          "at": "2026-11-18T19:09:14.054+00:00",
+          "correlation_id": "cid-8502abfa6f30"
+        },
+        "replay": {
+          "status": 200,
+          "body": {
+            "result": "DUPLICATE_IGNORED",
+            "event_id": "evt_182f4d464390ccf3",
+            "reservation_id": "r-001",
+            "status_before": "CONFIRMED",
+            "status_after": "CONFIRMED",
+            "first_processed_at": "2026-11-18T19:09:14.052231+00:00",
+            "first_outcome": "CONFIRMED",
+            "detail": "Udalosť už bola spracovaná. Prijatá bezpečne (200), stav sa nezmenil.",
+            "correlation_id": "cid-c01f1218870e"
+          }
+        },
+        "snapshot": {
+          "id": "r-001",
+          "event_id": "42",
+          "seat_id": "A7",
+          "buyer_id": "buyer-preflight",
+          "status": "CONFIRMED",
+          "created_at": "2026-11-18T19:09:14.011601+00:00",
+          "updated_at": "2026-11-18T19:09:14.052231+00:00",
+          "snapshot_at": "2026-11-18T19:09:14.068+00:00"
+        }
+      }
+    }
+  ]
+}

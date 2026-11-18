@@ -1,0 +1,6 @@
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+grpc_service/inventory_pb2*.py
+grpc_service/inventory_pb2*.pyi

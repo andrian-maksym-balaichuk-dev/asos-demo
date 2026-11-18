@@ -1,0 +1,80 @@
+name: ticketflow
+
+x-app-env: &app-env
+  DATABASE_URL: postgresql+psycopg://ticketflow:ticketflow@db:5432/ticketflow
+  WEBHOOK_SECRET: ${WEBHOOK_SECRET:-whsec_local_demo_only_change_me}
+  WEBHOOK_TOLERANCE_SECONDS: ${WEBHOOK_TOLERANCE_SECONDS:-300}
+  GRPC_TARGET: grpc:50051
+  PROVIDER_URL: http://provider:8002
+  SOAP_ADDRESS: http://localhost:8000/soap
+  SELF_URL: http://127.0.0.1:8000
+  DEMO_MODE: "true"
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ticketflow
+      POSTGRES_PASSWORD: ticketflow
+      POSTGRES_DB: ticketflow
+    ports:
+      - "127.0.0.1:${DB_HOST_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ticketflow -d ticketflow"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+
+  api:
+    build: .
+    image: ticketflow-api:local
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+    environment: *app-env
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 5s
+      timeout: 4s
+      retries: 20
+      start_period: 5s
+
+  grpc:
+    build: .
+    image: ticketflow-grpc:local
+    command: ["python", "-m", "grpc_service.server"]
+    environment: *app-env
+    ports:
+      - "${GRPC_PORT:-50051}:50051"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-m", "grpc_service.client", "--target", "127.0.0.1:50051", "--health"]
+      interval: 5s
+      timeout: 4s
+      retries: 20
+      start_period: 5s
+
+  provider:
+    build: .
+    image: ticketflow-provider:local
+    command: ["uvicorn", "provider_simulator.payment_provider:app", "--host", "0.0.0.0", "--port", "8002"]
+    environment:
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-whsec_local_demo_only_change_me}
+      WEBHOOK_TARGET_URL: http://api:8000/webhooks/payment
+    ports:
+      - "${PROVIDER_PORT:-8002}:8002"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/health', timeout=3)"]
+      interval: 5s
+      timeout: 4s
+      retries: 20
+
+volumes:
+  dbdata:

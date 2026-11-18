@@ -1,0 +1,25 @@
+// Demo B — interný RPC kontrakt pre dostupnosť sedadla.
+// Stuby sa generujú pri docker build:
+//   python -m grpc_tools.protoc -I . --python_out=. --grpc_python_out=. --pyi_out=. grpc_service/inventory.proto
+syntax = "proto3";
+
+package ticketflow.inventory.v1;
+
+service Inventory {
+  // Unary RPC. Klient si nastavuje DEADLINE (napr. 200 ms).
+  rpc CheckSeat (SeatRequest) returns (SeatReply);
+}
+
+message SeatRequest {
+  string event_id = 1;            // "42"
+  string seat_id = 2;             // "A7"
+  uint32 artificial_delay_ms = 3; // LEN pre demo: umelé spomalenie servera (max 5000)
+}
+
+message SeatReply {
+  string event_id = 1;
+  string seat_id = 2;
+  bool available = 3;
+  string status = 4;              // FREE | PENDING | CONFIRMED
+  uint32 server_elapsed_ms = 5;   // koľko trvala práca na serveri
+}
