@@ -1,49 +1,83 @@
-"""Demo B fallback: SOAP/WSDL a gRPC deadline (gRPC volanie robí API kontajner → grpc:50051).
-Použitie:
-  python3 scripts/demo_rpc.py --show-wsdl --check-seat A7
-  python3 scripts/demo_rpc.py --grpc-delay-ms 800 --deadline-ms 200"""
+"""Demo B (záloha z terminálu): SOAP/WSDL a gRPC deadline.
+
+gRPC volanie robí API kontajner (→ grpc:50051); skript volá iba HTTP endpointy /demo/rpc/*.
+
+Spustenie:
+    python3 scripts/demo_rpc.py --show-wsdl --check-seat A7
+    python3 scripts/demo_rpc.py --soap-fault
+    python3 scripts/demo_rpc.py --grpc-delay-ms 800 --deadline-ms 200
+"""
 import argparse
 import re
 
 from _client import get, line, title
 
-p = argparse.ArgumentParser()
-p.add_argument("--show-wsdl", action="store_true")
-p.add_argument("--check-seat", metavar="SEAT")
-p.add_argument("--soap-fault", action="store_true", help="pošli neplatný SOAP request")
-p.add_argument("--grpc-delay-ms", type=int)
-p.add_argument("--deadline-ms", type=int)
-a = p.parse_args()
 
-if a.show_wsdl:
+def show_wsdl():
     title("SOAP: GET /soap?wsdl (výrez)")
-    w = get("/soap?wsdl").body
-    for ln in w.splitlines():
-        if "CheckSeat" in ln or "soap:address" in ln:
-            print("  " + ln.strip())
-if a.check_seat:
-    title(f"SOAP: CheckSeat(42, {a.check_seat})")
-    j = get(f"/demo/rpc/soap?seat={a.check_seat}").json
-    print(j["request_xml"])
-    print(f"  HTTP {j['http_status']} · request {j['request_body_bytes']} B · response {j['response_body_bytes']} B (HTTP body)")
-    print(j["response_xml"])
-    title(f"gRPC: CheckSeat(42, {a.check_seat})")
-    g = get(f"/demo/rpc/grpc?seat={a.check_seat}").json
-    print(f"  {g['code']} · reply={g.get('reply')} · {g['client_elapsed_ms']} ms")
-    print(f"  protobuf: request {g['request_protobuf_bytes']} B · response {g.get('response_protobuf_bytes')} B "
+    wsdl = get("/soap?wsdl").body
+    for wsdl_line in wsdl.splitlines():
+        if "CheckSeat" in wsdl_line or "soap:address" in wsdl_line:
+            print("  " + wsdl_line.strip())
+
+
+def check_seat(seat):
+    # 1. SOAP: celé XML + veľkosť HTTP body
+    title(f"SOAP: CheckSeat(42, {seat})")
+    soap = get(f"/demo/rpc/soap?seat={seat}").json
+    print(soap["request_xml"])
+    print(f"  HTTP {soap['http_status']} · request {soap['request_body_bytes']} B · "
+          f"response {soap['response_body_bytes']} B (HTTP body)")
+    print(soap["response_xml"])
+
+    # 2. gRPC: rovnaká otázka, binárny protobuf
+    title(f"gRPC: CheckSeat(42, {seat})")
+    grpc = get(f"/demo/rpc/grpc?seat={seat}").json
+    print(f"  {grpc['code']} · reply={grpc.get('reply')} · {grpc['client_elapsed_ms']} ms")
+    print(f"  protobuf: request {grpc['request_protobuf_bytes']} B · response {grpc.get('response_protobuf_bytes')} B "
           "(bez HTTP/2 rámcov a hlavičiek)")
-if a.soap_fault:
+
+
+def soap_fault():
     title("SOAP: neplatný request (chýba seatId)")
-    j = get("/demo/rpc/soap?invalid=true").json
-    print(f"  HTTP {j['http_status']} · fault={j['is_fault']}")
-    print("  " + (re.search(r"<faultstring>(.*?)</faultstring>", j["response_xml"]) or [None, "?"])[1])
-if a.grpc_delay_ms is not None:
-    dl = f"&deadline_ms={a.deadline_ms}" if a.deadline_ms else ""
-    title(f"gRPC: server delay {a.grpc_delay_ms} ms, deadline {a.deadline_ms or '—'} ms")
-    g = get(f"/demo/rpc/grpc?seat=A7&delay_ms={a.grpc_delay_ms}{dl}").json
-    print(f"  stav: {g['code']} · {g.get('details') or g.get('reply')}")
-    print(f"  klient skončil po {g['client_elapsed_ms']} ms (deadline {a.deadline_ms} ms, server chcel pracovať {a.grpc_delay_ms} ms)")
-    if a.deadline_ms and a.grpc_delay_ms > a.deadline_ms:
-        line(g["code"] == "DEADLINE_EXCEEDED", "DEADLINE_EXCEEDED — čas a timeout sú odlišné pojmy")
-if not any([a.show_wsdl, a.check_seat, a.soap_fault, a.grpc_delay_ms is not None]):
-    p.print_help()
+    soap = get("/demo/rpc/soap?invalid=true").json
+    print(f"  HTTP {soap['http_status']} · fault={soap['is_fault']}")
+    faultstring = re.search(r"<faultstring>(.*?)</faultstring>", soap["response_xml"])
+    print("  " + (faultstring[1] if faultstring else "?"))
+
+
+def grpc_deadline(delay_ms, deadline_ms):
+    deadline_param = f"&deadline_ms={deadline_ms}" if deadline_ms else ""
+    title(f"gRPC: server delay {delay_ms} ms, deadline {deadline_ms or '—'} ms")
+    grpc = get(f"/demo/rpc/grpc?seat=A7&delay_ms={delay_ms}{deadline_param}").json
+    print(f"  stav: {grpc['code']} · {grpc.get('details') or grpc.get('reply')}")
+    print(f"  klient skončil po {grpc['client_elapsed_ms']} ms "
+          f"(deadline {deadline_ms} ms, server chcel pracovať {delay_ms} ms)")
+    # Klient prestane čakať pri deadline, aj keď server by ešte pracoval
+    if deadline_ms and delay_ms > deadline_ms:
+        line(grpc["code"] == "DEADLINE_EXCEEDED", "DEADLINE_EXCEEDED — čas a timeout sú odlišné pojmy")
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--show-wsdl", action="store_true")
+    parser.add_argument("--check-seat", metavar="SEAT")
+    parser.add_argument("--soap-fault", action="store_true", help="pošli neplatný SOAP request")
+    parser.add_argument("--grpc-delay-ms", type=int)
+    parser.add_argument("--deadline-ms", type=int)
+    args = parser.parse_args()
+
+    if args.show_wsdl:
+        show_wsdl()
+    if args.check_seat:
+        check_seat(args.check_seat)
+    if args.soap_fault:
+        soap_fault()
+    if args.grpc_delay_ms is not None:
+        grpc_deadline(args.grpc_delay_ms, args.deadline_ms)
+    if not any([args.show_wsdl, args.check_seat, args.soap_fault, args.grpc_delay_ms is not None]):
+        parser.print_help()
+
+
+if __name__ == "__main__":
+    main()

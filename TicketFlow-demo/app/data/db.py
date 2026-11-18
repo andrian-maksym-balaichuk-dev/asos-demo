@@ -15,27 +15,40 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_en
 
 from app import config
 
+
+# ════════════════════════════════════════════════════════════════════════
+# 1. Engine — jeden pool spojení pre celý proces
+# ════════════════════════════════════════════════════════════════════════
+
 engine: AsyncEngine = create_async_engine(
     config.DATABASE_URL, pool_size=10, max_overflow=20, pool_recycle=1800
 )
 
+
+# ════════════════════════════════════════════════════════════════════════
+# 2. Počítanie SQL dotazov (Demo C — GraphQL N+1)
+# ════════════════════════════════════════════════════════════════════════
+
+# Kľúč v conn.info: log existuje len na spojeniach z recorded_connection()
 QUERY_LOG_KEY = "ticketflow_query_log"
-
-
-def _safe_params(parameters: Any) -> Any:
-    if isinstance(parameters, dict):
-        return {k: (v if isinstance(v, (int, float, str, bool)) or v is None else str(v))
-                for k, v in list(parameters.items())[:12]}
-    if isinstance(parameters, (list, tuple)):
-        return [str(p) for p in parameters[:12]]
-    return str(parameters)
+MAX_LOGGED_PARAMS = 12
 
 
 @event.listens_for(engine.sync_engine, "before_cursor_execute")
 def _record_statement(conn, cursor, statement, parameters, context, executemany):  # noqa: ARG001
-    log = conn.info.get(QUERY_LOG_KEY)
-    if log is not None:
-        log.append({"sql": " ".join(statement.split()), "params": _safe_params(parameters)})
+    query_log = conn.info.get(QUERY_LOG_KEY)
+    if query_log is not None:
+        query_log.append({"sql": " ".join(statement.split()), "params": _safe_params(parameters)})
+
+
+def _safe_params(parameters: Any) -> Any:
+    """Parametre skrátené a prevedené na JSON-kompatibilné typy (idú do odpovede)."""
+    if isinstance(parameters, dict):
+        return {name: (value if isinstance(value, (int, float, str, bool)) or value is None else str(value))
+                for name, value in list(parameters.items())[:MAX_LOGGED_PARAMS]}
+    if isinstance(parameters, (list, tuple)):
+        return [str(value) for value in parameters[:MAX_LOGGED_PARAMS]]
+    return str(parameters)
 
 
 @asynccontextmanager
@@ -43,13 +56,18 @@ async def recorded_connection():
     """Spojenie v AUTOCOMMIT režime (žiadny implicitný BEGIN) s vlastným SQL logom."""
     async with engine.connect() as conn:
         conn = await conn.execution_options(isolation_level="AUTOCOMMIT")
-        log: list[dict] = []
-        conn.sync_connection.info[QUERY_LOG_KEY] = log
+        query_log: list[dict] = []
+        conn.sync_connection.info[QUERY_LOG_KEY] = query_log
         try:
-            yield conn, log
+            yield conn, query_log
         finally:
+            # spojenie sa vracia do poolu → log musí zmiznúť, inak by počítal cudzie dotazy
             conn.sync_connection.info.pop(QUERY_LOG_KEY, None)
 
+
+# ════════════════════════════════════════════════════════════════════════
+# 3. Drobné pomôcky
+# ════════════════════════════════════════════════════════════════════════
 
 async def ping() -> bool:
     async with engine.connect() as conn:
@@ -59,4 +77,4 @@ async def ping() -> bool:
 
 async def fetch_all(conn: AsyncConnection, sql: str, **params) -> list[dict]:
     result = await conn.execute(text(sql), params)
-    return [dict(r._mapping) for r in result]
+    return [dict(row._mapping) for row in result]

@@ -14,6 +14,7 @@ from app.data.db import engine
 from app.data.models import SCHEMA_SQL
 
 ROWS = "ABCDEFGHIJ"
+SEATS_PER_ROW = 10
 EVENT = {
     "id": "42",
     "name": "TicketFlow Live — Koncert 42",
@@ -21,6 +22,42 @@ EVENT = {
     "starts_at": "2026-12-12T19:00:00+01:00",
 }
 
+
+# ════════════════════════════════════════════════════════════════════════
+# 1. SQL príkazy
+# ════════════════════════════════════════════════════════════════════════
+
+SQL_TRUNCATE_ALL = text("""
+    TRUNCATE processed_webhook_events, idempotency_keys, reservations, prices, seats, events
+""")
+
+# r-001 po každom resete → rovnaké ID v každom behu dema
+SQL_RESTART_RESERVATION_SEQ = text("ALTER SEQUENCE reservation_seq RESTART WITH 1")
+
+SQL_INSERT_EVENT = text("""
+    INSERT INTO events (id, name, venue, starts_at)
+    VALUES (:id, :name, :venue, CAST(:starts_at AS timestamptz))
+""")
+
+SQL_INSERT_SEAT = text("""
+    INSERT INTO seats (event_id, seat_id, row_label, seat_number)
+    VALUES (:event_id, :seat_id, :row_label, :seat_number)
+""")
+
+SQL_INSERT_PRICE = text("""
+    INSERT INTO prices (event_id, seat_id, amount_cents, currency, internal_cost_cents)
+    VALUES (:event_id, :seat_id, :amount_cents, 'EUR', :internal_cost_cents)
+""")
+
+# Advisory lock: bezpečné, aj keby schému vytváralo viac procesov naraz
+SQL_SCHEMA_LOCK = text("SELECT pg_advisory_xact_lock(4242)")
+
+SQL_DEMO_EVENT_EXISTS = text("SELECT 1 FROM events WHERE id = '42'")
+
+
+# ════════════════════════════════════════════════════════════════════════
+# 2. Dáta
+# ════════════════════════════════════════════════════════════════════════
 
 def price_for_row(row: str) -> tuple[int, int]:
     """(cena pre zákazníka, interný náklad) v centoch."""
@@ -31,45 +68,47 @@ def price_for_row(row: str) -> tuple[int, int]:
     return 3200, 1700
 
 
-async def create_schema(conn: AsyncConnection) -> None:
-    for stmt in SCHEMA_SQL:
-        await conn.execute(text(stmt))
-
-
-async def reset_and_seed(conn: AsyncConnection) -> dict:
-    await conn.execute(text(
-        "TRUNCATE processed_webhook_events, idempotency_keys, reservations, prices, seats, events"
-    ))
-    await conn.execute(text("ALTER SEQUENCE reservation_seq RESTART WITH 1"))
-    await conn.execute(
-        text("INSERT INTO events (id, name, venue, starts_at) VALUES (:id, :name, :venue, CAST(:starts_at AS timestamptz))"),
-        EVENT,
-    )
+def _seat_and_price_rows() -> tuple[list[dict], list[dict]]:
     seats, prices = [], []
     for row in ROWS:
         amount, cost = price_for_row(row)
-        for n in range(1, 11):
-            sid = f"{row}{n}"
-            seats.append({"e": EVENT["id"], "s": sid, "r": row, "n": n})
-            prices.append({"e": EVENT["id"], "s": sid, "a": amount, "c": cost})
-    await conn.execute(
-        text("INSERT INTO seats (event_id, seat_id, row_label, seat_number) VALUES (:e, :s, :r, :n)"), seats
-    )
-    await conn.execute(
-        text("INSERT INTO prices (event_id, seat_id, amount_cents, currency, internal_cost_cents) "
-             "VALUES (:e, :s, :a, 'EUR', :c)"),
-        prices,
-    )
+        for number in range(1, SEATS_PER_ROW + 1):
+            seat_id = f"{row}{number}"
+            seats.append({"event_id": EVENT["id"], "seat_id": seat_id, "row_label": row, "seat_number": number})
+            prices.append({"event_id": EVENT["id"], "seat_id": seat_id,
+                           "amount_cents": amount, "internal_cost_cents": cost})
+    return seats, prices
+
+
+# ════════════════════════════════════════════════════════════════════════
+# 3. Schéma, reset a seed
+# ════════════════════════════════════════════════════════════════════════
+
+async def create_schema(conn: AsyncConnection) -> None:
+    for statement in SCHEMA_SQL:
+        await conn.execute(text(statement))
+
+
+async def reset_and_seed(conn: AsyncConnection) -> dict:
+    # 1. vymaž všetko a vráť sekvenciu na začiatok
+    await conn.execute(SQL_TRUNCATE_ALL)
+    await conn.execute(SQL_RESTART_RESERVATION_SEQ)
+
+    # 2. udalosť, sedadlá a ceny (executemany = jeden príkaz pre všetky riadky)
+    await conn.execute(SQL_INSERT_EVENT, EVENT)
+    seats, prices = _seat_and_price_rows()
+    await conn.execute(SQL_INSERT_SEAT, seats)
+    await conn.execute(SQL_INSERT_PRICE, prices)
+
     return {"event_id": EVENT["id"], "seats": len(seats), "prices": len(prices)}
 
 
 async def ensure_seeded() -> None:
     """Pri štarte: vytvor schému; ak chýba event 42, naseeduj."""
     async with engine.begin() as conn:
-        # advisory lock: bezpečné aj keby sa schéma vytvárala z viacerých procesov
-        await conn.execute(text("SELECT pg_advisory_xact_lock(4242)"))
+        await conn.execute(SQL_SCHEMA_LOCK)
         await create_schema(conn)
-        exists = (await conn.execute(text("SELECT 1 FROM events WHERE id = '42'"))).first()
+        exists = (await conn.execute(SQL_DEMO_EVENT_EXISTS)).first()
         if not exists:
             await reset_and_seed(conn)
 

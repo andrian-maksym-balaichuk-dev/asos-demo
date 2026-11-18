@@ -1,55 +1,91 @@
-"""Demo D fallback: podpísaný webhook, neplatný podpis, duplicita, WebSocket a reconnect snapshot.
-Použitie: python3 scripts/demo_webhook.py --all-cases"""
+"""Demo D (záloha z terminálu): podpísaný webhook, neplatný podpis, duplicita, WebSocket a reconnect snapshot.
+
+Spustenie:  python3 scripts/demo_webhook.py --all-cases
+"""
 import argparse
 
 from _client import BASE_URL, get, line, post, title
 from _ws import MiniWS
 
-p = argparse.ArgumentParser()
-p.add_argument("--all-cases", action="store_true")
-a = p.parse_args()
-if not a.all_cases:
-    p.print_help()
-    raise SystemExit(0)
+WS_URL = BASE_URL.replace("http", "ws", 1) + "/ws"
 
-WS = BASE_URL.replace("http", "ws", 1) + "/ws"
-post("/demo/reset")
-rid = post("/reservations", {"event_id": "42", "seat_id": "A7", "buyer_id": "buyer-cli"}).json["id"]
-status = lambda: get(f"/reservations/{rid}").json["status"]  # noqa: E731
-print(f"Rezervácia {rid} = {status()}")
+REJECTED_CASES = (
+    ("unsigned", "Bez podpisu"),
+    ("bad-signature", "Pokazený podpis"),
+    ("stale", "Starý timestamp"),
+)
 
-ws_a, ws_b = MiniWS(WS + "?client=cli-A"), MiniWS(WS + "?client=cli-B")
-ws_a.recv_type("hello"), ws_b.recv_type("hello")
-ws_off = MiniWS(WS + "?client=cli-offline")
-ws_off.recv_type("hello")
-ws_off.close()
-print("Pripojení 2 WebSocket klienti; tretí klient sa odpojil.")
 
-for action, label in (("unsigned", "Bez podpisu"), ("bad-signature", "Pokazený podpis"), ("stale", "Starý timestamp")):
-    title(label)
-    before = status()
-    r = post(f"/demo/provider/{action}", {"reservation_id": rid}).json
-    after = status()
-    print(f"  príjemca: {r['received']['status']} {r['received']['body'].get('code')}")
-    line(r["received"]["status"] in (400, 401) and before == after == "PENDING", f"stav {before} → {after} (DB nezmenená)")
+def connect(client_name):
+    """Pripojí WebSocket klienta a počká na úvodnú správu hello."""
+    ws = MiniWS(WS_URL + f"?client={client_name}")
+    hello = ws.recv_type("hello")
+    return ws, hello
 
-title("Platný podpis")
-r = post("/demo/provider/payment", {"reservation_id": rid}).json
-print(f"  {r['sent']['headers'].get('TicketFlow-Signature', '')[:40]}…")
-b = r["received"]["body"]
-line(b.get("outcome") == "CONFIRMED", f"{b.get('status_before')} → {b.get('status_after')} · event {b.get('event_id')}")
-ma, mb = ws_a.recv_type("reservation.confirmed"), ws_b.recv_type("reservation.confirmed")
-line(ma["reservation"]["status"] == mb["reservation"]["status"] == "CONFIRMED", "oba WebSocket klienti dostali reservation.confirmed")
 
-title("Zopakovaný webhook (rovnaké event id)")
-r = post("/demo/provider/replay", {}).json
-b = r["received"]["body"]
-line(b.get("result") == "DUPLICATE_IGNORED", f"{r['received']['status']} {b.get('result')} · stav {b.get('status_after')}")
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--all-cases", action="store_true")
+    args = parser.parse_args()
+    if not args.all_cases:
+        parser.print_help()
+        raise SystemExit(0)
 
-title("Reconnect odpojeného klienta")
-ws_off = MiniWS(WS + "?client=cli-offline")
-hello = ws_off.recv_type("hello")
-snap = get(f"/reservations/{rid}").json
-line(snap["status"] == "CONFIRMED", f"snapshot GET /reservations/{rid} → {snap['status']} (server nerobí replay: „{hello['note']}“)")
-for w in (ws_a, ws_b, ws_off):
-    w.close()
+    # 1. čerstvá rezervácia v stave PENDING
+    post("/demo/reset")
+    reservation_id = post("/reservations",
+                          {"event_id": "42", "seat_id": "A7", "buyer_id": "buyer-cli"}).json["id"]
+
+    def reservation_status():
+        return get(f"/reservations/{reservation_id}").json["status"]
+
+    print(f"Rezervácia {reservation_id} = {reservation_status()}")
+
+    # 2. dvaja online klienti + tretí, ktorý sa odpojí (zmešká udalosť)
+    ws_a, _ = connect("cli-A")
+    ws_b, _ = connect("cli-B")
+    ws_offline, _ = connect("cli-offline")
+    ws_offline.close()
+    print("Pripojení 2 WebSocket klienti; tretí klient sa odpojil.")
+
+    # 3. neplatné webhooky → príjemca odmietne, DB sa nezmení
+    for action, label in REJECTED_CASES:
+        title(label)
+        status_before = reservation_status()
+        result = post(f"/demo/provider/{action}", {"reservation_id": reservation_id}).json
+        status_after = reservation_status()
+        print(f"  príjemca: {result['received']['status']} {result['received']['body'].get('code')}")
+        line(result["received"]["status"] in (400, 401) and status_before == status_after == "PENDING",
+             f"stav {status_before} → {status_after} (DB nezmenená)")
+
+    # 4. platný podpis → CONFIRMED + push cez WebSocket
+    title("Platný podpis")
+    result = post("/demo/provider/payment", {"reservation_id": reservation_id}).json
+    print(f"  {result['sent']['headers'].get('TicketFlow-Signature', '')[:40]}…")
+    receiver_body = result["received"]["body"]
+    line(receiver_body.get("outcome") == "CONFIRMED",
+         f"{receiver_body.get('status_before')} → {receiver_body.get('status_after')} · event {receiver_body.get('event_id')}")
+    message_a = ws_a.recv_type("reservation.confirmed")
+    message_b = ws_b.recv_type("reservation.confirmed")
+    line(message_a["reservation"]["status"] == message_b["reservation"]["status"] == "CONFIRMED",
+         "oba WebSocket klienti dostali reservation.confirmed")
+
+    # 5. provider zopakuje tú istú udalosť → dedupe podľa event id
+    title("Zopakovaný webhook (rovnaké event id)")
+    result = post("/demo/provider/replay", {}).json
+    receiver_body = result["received"]["body"]
+    line(receiver_body.get("result") == "DUPLICATE_IGNORED",
+         f"{result['received']['status']} {receiver_body.get('result')} · stav {receiver_body.get('status_after')}")
+
+    # 6. reconnect: server udalosti neprehráva → klient si načíta snapshot cez REST
+    title("Reconnect odpojeného klienta")
+    ws_offline, hello = connect("cli-offline")
+    snapshot = get(f"/reservations/{reservation_id}").json
+    line(snapshot["status"] == "CONFIRMED",
+         f"snapshot GET /reservations/{reservation_id} → {snapshot['status']} (server nerobí replay: „{hello['note']}“)")
+    for ws in (ws_a, ws_b, ws_offline):
+        ws.close()
+
+
+if __name__ == "__main__":
+    main()

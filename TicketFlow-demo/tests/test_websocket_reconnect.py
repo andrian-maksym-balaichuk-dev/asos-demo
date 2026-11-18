@@ -8,38 +8,50 @@ from tests.conftest import WS_URL, create_pending
 
 
 async def _recv_type(ws, wanted: str, timeout=5.0) -> dict:
-    async def loop():
+    """Čaká na správu daného "type" (iné správy preskočí), najviac `timeout` sekúnd."""
+    async def wait_for_wanted():
         while True:
-            msg = json.loads(await ws.recv())
-            if msg["type"] == wanted:
-                return msg
-    return await asyncio.wait_for(loop(), timeout)
+            message = json.loads(await ws.recv())
+            if message["type"] == wanted:
+                return message
+    return await asyncio.wait_for(wait_for_wanted(), timeout)
 
 
 async def test_two_clients_receive_confirmation(client):
-    rid = (await create_pending(client))["id"]
-    async with websockets.connect(WS_URL + "?client=A") as a, websockets.connect(WS_URL + "?client=B") as b:
-        await _recv_type(a, "hello")
-        await _recv_type(b, "hello")
-        await client.post("/demo/provider/payment", json={"reservation_id": rid})
-        ma, mb = await asyncio.gather(_recv_type(a, "reservation.confirmed"), _recv_type(b, "reservation.confirmed"))
-        assert ma["reservation"]["id"] == mb["reservation"]["id"] == rid
-        assert ma["reservation"]["status"] == "CONFIRMED"
+    """Po platnom webhooku server pushne reservation.confirmed OBOM pripojeným klientom."""
+    reservation_id = (await create_pending(client))["id"]
+    async with websockets.connect(WS_URL + "?client=A") as ws_a, websockets.connect(WS_URL + "?client=B") as ws_b:
+        await _recv_type(ws_a, "hello")
+        await _recv_type(ws_b, "hello")
+
+        await client.post("/demo/provider/payment", json={"reservation_id": reservation_id})
+
+        message_a, message_b = await asyncio.gather(_recv_type(ws_a, "reservation.confirmed"),
+                                                    _recv_type(ws_b, "reservation.confirmed"))
+        assert message_a["reservation"]["id"] == message_b["reservation"]["id"] == reservation_id
+        assert message_a["reservation"]["status"] == "CONFIRMED"
 
 
 async def test_reconnect_recovers_via_snapshot(client):
-    rid = (await create_pending(client))["id"]
+    """Zmeškanú udalosť server neprehrá; klient po reconnecte získa stav cez REST snapshot."""
+    reservation_id = (await create_pending(client))["id"]
+
+    # 1. klient sa pripojí a odpojí
     ws = await websockets.connect(WS_URL + "?client=offline")
     await _recv_type(ws, "hello")
-    await ws.close()                                   # klient sa odpojí
-    await client.post("/demo/provider/payment", json={"reservation_id": rid})  # zmena počas výpadku
-    async with websockets.connect(WS_URL + "?client=offline") as ws2:
-        hello = await _recv_type(ws2, "hello")
+    await ws.close()
+
+    # 2. zmena počas výpadku
+    await client.post("/demo/provider/payment", json={"reservation_id": reservation_id})
+
+    # 3. reconnect → snapshot, žiadny replay
+    async with websockets.connect(WS_URL + "?client=offline") as ws_reconnected:
+        hello = await _recv_type(ws_reconnected, "hello")
         assert "replay" in hello["note"]               # server nesľubuje replay
-        snap = (await client.get(f"/reservations/{rid}")).json()
-        assert snap["status"] == "CONFIRMED"           # stav získaný zo snapshotu
+        snapshot = (await client.get(f"/reservations/{reservation_id}")).json()
+        assert snapshot["status"] == "CONFIRMED"       # stav získaný zo snapshotu
         try:
-            msg = await asyncio.wait_for(ws2.recv(), 0.5)
-            assert json.loads(msg)["type"] != "reservation.confirmed"
+            late_message = await asyncio.wait_for(ws_reconnected.recv(), 0.5)
+            assert json.loads(late_message)["type"] != "reservation.confirmed"
         except asyncio.TimeoutError:
             pass                                       # zmeškaná správa nepríde — správne

@@ -1,458 +1,795 @@
-/* TicketFlow dashboard — všetko sú skutočné HTTP / WebSocket volania. Žiadne predpripravené výsledky. */
+/* TicketFlow dashboard — všetko sú skutočné HTTP / WebSocket volania. Žiadne predpripravené výsledky.
+   Poradie v súbore: pomocné funkcie → Demo A (REST) → Demo B (SOAP + gRPC)
+                     → Demo C (GraphQL) → Demo D (webhook + WebSocket) → tlačidlá a štart. */
 "use strict";
 
-const $ = (sel, root = document) => root.querySelector(sel);
-const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const timeNow = () => new Date().toLocaleTimeString("sk-SK", { hour12: false }) + "." + String(new Date().getMilliseconds()).padStart(3, "0");
-const rnd = () => Math.random().toString(36).slice(2, 10);
+/* =====================================================================
+   POMOCNÉ FUNKCIE
+   ===================================================================== */
+const $ = (selector, root = document) => root.querySelector(selector);
+
+// Escapovanie všetkého, čo ide do innerHTML (dáta zo servera / od používateľa) — ochrana pred XSS
+const HTML_ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => HTML_ESCAPES[char]);
+
+// Čas s milisekundami — v logu je vidieť poradie udalostí
+const timeNow = () => {
+  const now = new Date();
+  return now.toLocaleTimeString("sk-SK", { hour12: false }) + "." + String(now.getMilliseconds()).padStart(3, "0");
+};
+const randomId = () => Math.random().toString(36).slice(2, 10);
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const params = new URLSearchParams(location.search);
 const SEAT_LABEL = { FREE: "VOĽNÉ", PENDING: "PENDING", CONFIRMED: "CONFIRMED" };
 
 /* ---------- HTTP ---------- */
+// Jediné miesto, kde dashboard volá API. Vráti stav, telo, correlation ID a trvanie.
 async function api(method, path, { body, headers = {}, raw = false } = {}) {
-  const h = { ...headers };
-  if (body !== undefined) h["Content-Type"] = "application/json";
-  const t0 = performance.now();
-  let res;
+  const requestHeaders = { ...headers };
+  if (body !== undefined) requestHeaders["Content-Type"] = "application/json";
+  const startedAt = performance.now();
+
+  let response;
   try {
-    res = await fetch(path, { method, headers: h, body: body !== undefined ? JSON.stringify(body) : undefined });
-  } catch (e) {
-    showOffline(true);
-    return { status: 0, ok: false, json: null, text: String(e), cid: "-", ms: 0, headers: new Headers() };
+    response = await fetch(path, {
+      method,
+      headers: requestHeaders,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch (error) {
+    showOffline(true);                                   // API nebeží → červený banner
+    return { status: 0, ok: false, json: null, text: String(error), cid: "-", ms: 0, headers: new Headers() };
   }
   showOffline(false);
-  const text = await res.text();
+
+  const text = await response.text();
   let json = null;
-  if (!raw) { try { json = JSON.parse(text); } catch { /* not json */ } }
-  return { status: res.status, ok: res.ok, json, text, cid: res.headers.get("X-Correlation-ID") || "-",
-           ms: Math.round(performance.now() - t0), headers: res.headers };
+  if (!raw) {
+    try { json = JSON.parse(text); } catch { /* nie je JSON */ }
+  }
+  return {
+    status: response.status,
+    ok: response.ok,
+    json,
+    text,
+    cid: response.headers.get("X-Correlation-ID") || "-",
+    ms: Math.round(performance.now() - startedAt),
+    headers: response.headers,
+  };
 }
 
-function showOffline(on) { $("#offline-banner").style.display = on ? "block" : "none"; }
+function showOffline(isOffline) {
+  $("#offline-banner").style.display = isOffline ? "block" : "none";
+}
 
+/* ---------- Log udalostí (spodok každej karty) ---------- */
 function log(demo, { status, label, cid, before, after }) {
-  const li = document.createElement("li");
-  const cls = status >= 200 && status < 300 ? "ok" : (status ? "err" : "");
-  const ba = before !== undefined || after !== undefined ? ` <span class="ba">${esc(before ?? "—")} → ${esc(after ?? "—")}</span>` : "";
-  li.innerHTML = `<span class="t">${timeNow()}</span><span class="code ${cls}">${status || "—"}</span>` +
-    `<span>${esc(label)}${ba}<br><span class="cid">${esc(cid || "-")}</span></span>`;
-  $(`#log-${demo}`).prepend(li);
+  const statusClass = status >= 200 && status < 300 ? "ok" : (status ? "err" : "");
+  const hasChange = before !== undefined || after !== undefined;
+  const change = hasChange
+    ? ` <span class="ba">${esc(before ?? "—")} → ${esc(after ?? "—")}</span>`
+    : "";
+
+  const item = document.createElement("li");
+  item.innerHTML =
+    `<span class="t">${timeNow()}</span>` +
+    `<span class="code ${statusClass}">${status || "—"}</span>` +
+    `<span>${esc(label)}${change}<br><span class="cid">${esc(cid || "-")}</span></span>`;
+  $(`#log-${demo}`).prepend(item);                    // najnovšie hore
 }
 
+/* ---------- Farebný odznak so stavom HTTP ---------- */
 function badge(status, text) {
-  const cls = status >= 200 && status < 300 ? "ok" : status === 409 || status === 422 ? "warn" : "err";
-  return `<span class="badge ${cls}">${esc(text)}</span>`;
-}
-const httpText = (s) => ({ 200: "200 OK", 201: "201 Created", 400: "400 Bad Request", 401: "401 Unauthorized",
-  404: "404 Not Found", 409: "409 Conflict", 422: "422 Unprocessable", 500: "500 Fault", 0: "Sieťová chyba" }[s] || String(s));
-
-async function busy(btn, fn) {
-  const all = btn.closest(".buttons")?.querySelectorAll("button") || [btn];
-  all.forEach((b) => (b.disabled = true));
-  try { await fn(); } catch (e) { console.error(e); alert("Chyba v demo paneli: " + e.message); }
-  finally { all.forEach((b) => (b.disabled = false)); }
+  const badgeClass = status >= 200 && status < 300 ? "ok"
+    : status === 409 || status === 422 ? "warn"
+    : "err";
+  return `<span class="badge ${badgeClass}">${esc(text)}</span>`;
 }
 
-/* ---------- Health ---------- */
+const HTTP_TEXT = {
+  200: "200 OK", 201: "201 Created", 400: "400 Bad Request", 401: "401 Unauthorized",
+  404: "404 Not Found", 409: "409 Conflict", 422: "422 Unprocessable", 500: "500 Fault", 0: "Sieťová chyba",
+};
+const httpText = (status) => HTTP_TEXT[status] || String(status);
+
+// Počas behu akcie zablokuje všetky tlačidlá v skupine (aby sa nedalo klikať dvakrát)
+async function busy(button, action) {
+  const group = button.closest(".buttons")?.querySelectorAll("button") || [button];
+  group.forEach((other) => (other.disabled = true));
+  try {
+    await action();
+  } catch (error) {
+    console.error(error);
+    alert("Chyba v demo paneli: " + error.message);
+  } finally {
+    group.forEach((other) => (other.disabled = false));
+  }
+}
+
+/* ---------- Health čipy v hlavičke ---------- */
+const HEALTHY_VALUE = { db: "ok", grpc: "SERVING", provider: "ok" };
+const DEPENDENCY_NAME = { db: "PostgreSQL", grpc: "gRPC :50051", provider: "Provider" };
+
 async function refreshHealth() {
-  const r = await api("GET", "/health/deps");
-  const d = r.json || {};
-  const okv = { db: "ok", grpc: "SERVING", provider: "ok" };
-  document.querySelectorAll("#health [data-dep]").forEach((el) => {
-    const k = el.dataset.dep;
-    const ok = d[k] === okv[k];
-    el.className = "chip " + (ok ? "ok" : "bad");
-    el.textContent = { db: "PostgreSQL", grpc: "gRPC :50051", provider: "Provider" }[k] + (ok ? " ✓" : " ✗");
+  const response = await api("GET", "/health/deps");
+  const deps = response.json || {};
+  document.querySelectorAll("#health [data-dep]").forEach((chip) => {
+    const dep = chip.dataset.dep;
+    const healthy = deps[dep] === HEALTHY_VALUE[dep];
+    chip.className = "chip " + (healthy ? "ok" : "bad");
+    chip.textContent = DEPENDENCY_NAME[dep] + (healthy ? " ✓" : " ✗");
   });
 }
 
-/* ---------- Tabs ---------- */
-function selectTab(t) {
-  document.querySelectorAll("nav.tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === t)));
-  document.querySelectorAll("section.panel").forEach((p) => p.classList.toggle("active", p.dataset.demo === t));
-  history.replaceState(null, "", `?tab=${t}${params.get("solo") ? "&solo=" + params.get("solo") : ""}`);
+/* ---------- Karty A–D a podkarty SOAP / gRPC ---------- */
+function selectTab(tab) {
+  document.querySelectorAll("nav.tabs button").forEach((button) =>
+    button.setAttribute("aria-selected", String(button.dataset.tab === tab)));
+  document.querySelectorAll("section.panel").forEach((panel) =>
+    panel.classList.toggle("active", panel.dataset.demo === tab));
+
+  const solo = params.get("solo");
+  history.replaceState(null, "", `?tab=${tab}${solo ? "&solo=" + solo : ""}`);
 }
-document.querySelectorAll("nav.tabs button").forEach((b) => b.addEventListener("click", () => selectTab(b.dataset.tab)));
-document.querySelectorAll(".subtabs button").forEach((b) => b.addEventListener("click", () => {
-  document.querySelectorAll(".subtabs button").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
-  $("#sub-soap").hidden = b.dataset.sub !== "soap";
-  $("#sub-grpc").hidden = b.dataset.sub !== "grpc";
-}));
+
+function selectSubtab(clicked) {
+  document.querySelectorAll(".subtabs button").forEach((button) =>
+    button.setAttribute("aria-selected", String(button === clicked)));
+  $("#sub-soap").hidden = clicked.dataset.sub !== "soap";
+  $("#sub-grpc").hidden = clicked.dataset.sub !== "grpc";
+}
 
 /* =====================================================================
    DEMO A — REST
+   Retry s rovnakým Idempotency-Key ≠ nový nákup. Súbeh dvoch kupujúcich = 1 víťaz.
    ===================================================================== */
-const A = { last: null };
+const A = { last: null };            // posledný request { body, key } — na retry / mismatch
 
+// Stav miesta priamo z DB (aby publikum videlo, čo sa naozaj zapísalo)
 async function seatState(seat = "A7") {
-  const r = await api("GET", `/demo/state?seat=${seat}`);
-  return r.json;
-}
-function renderSeat(st) {
-  if (!st) return;
-  $("#a-seat").textContent = SEAT_LABEL[st.seat.status] || st.seat.status;
-  $("#a-count").textContent = st.active_count;
-  $("#a-sql").textContent = "SELECT id, buyer_id, status FROM reservations\nWHERE seat_id = 'A7' AND status IN ('PENDING','CONFIRMED');\n\n" +
-    (st.active_reservations.length ? st.active_reservations.map((r) => `${r.id} | ${r.buyer_id} | ${r.status}`).join("\n") : "(0 riadkov)");
+  const response = await api("GET", `/demo/state?seat=${seat}`);
+  return response.json;
 }
 
-function renderA(title, r, extra = "") {
-  const j = r.json || {};
-  const replay = r.headers.get("Idempotent-Replayed");
-  $("#a-result").innerHTML = `<div class="status-line">${badge(r.status, httpText(r.status))}<span class="big">${esc(title)}</span></div>
-    ${j.id ? `<div>reservation_id <b>${esc(j.id)}</b>${replay ? ` · Idempotent-Replayed: <b>${esc(replay)}</b>` : ""}</div>` : ""}
-    ${j.code ? `<div><b>${esc(j.code)}</b></div>` : ""}${extra}
-    <div class="small muted">${esc(r.cid)}</div>`;
-  if (j.id) $("#a-rid").textContent = j.id;
+function createReservation(body, idempotencyKey) {
+  return api("POST", "/reservations", { body, headers: { "Idempotency-Key": idempotencyKey } });
 }
 
+// Dlaždice „A7“, „Rezervácie v DB“ + SQL výpis
+function renderSeat(state) {
+  if (!state) return;
+  $("#a-seat").textContent = SEAT_LABEL[state.seat.status] || state.seat.status;
+  $("#a-count").textContent = state.active_count;
+
+  const rows = state.active_reservations.length
+    ? state.active_reservations.map((row) => `${row.id} | ${row.buyer_id} | ${row.status}`).join("\n")
+    : "(0 riadkov)";
+  $("#a-sql").textContent =
+    "SELECT id, buyer_id, status FROM reservations\n" +
+    "WHERE seat_id = 'A7' AND status IN ('PENDING','CONFIRMED');\n\n" +
+    rows;
+}
+
+// Výsledková karta: HTTP stav, reservation_id, prípadne Idempotent-Replayed
+function renderA(title, response, extraHtml = "") {
+  const data = response.json || {};
+  const replayed = response.headers.get("Idempotent-Replayed");
+  const replayedHtml = replayed ? ` · Idempotent-Replayed: <b>${esc(replayed)}</b>` : "";
+
+  $("#a-result").innerHTML = `
+    <div class="status-line">${badge(response.status, httpText(response.status))}<span class="big">${esc(title)}</span></div>
+    ${data.id ? `<div>reservation_id <b>${esc(data.id)}</b>${replayedHtml}</div>` : ""}
+    ${data.code ? `<div><b>${esc(data.code)}</b></div>` : ""}${extraHtml}
+    <div class="small muted">${esc(response.cid)}</div>`;
+  if (data.id) $("#a-rid").textContent = data.id;
+}
+
+// Prvý nákup: nový Idempotency-Key
 async function aCreate() {
   const before = await seatState();
-  A.last = { body: { event_id: "42", seat_id: "A7", buyer_id: "buyer-anna" }, key: "demo-" + rnd() };
-  const r = await api("POST", "/reservations", { body: A.last.body, headers: { "Idempotency-Key": A.last.key } });
+  A.last = { body: { event_id: "42", seat_id: "A7", buyer_id: "buyer-anna" }, key: "demo-" + randomId() };
+  const response = await createReservation(A.last.body, A.last.key);
   const after = await seatState();
-  renderA("Vytvorené", r);
+
+  renderA("Vytvorené", response);
   renderSeat(after);
-  log("A", { status: r.status, label: `Vytvoriť (key ${A.last.key})`, cid: r.cid, before: SEAT_LABEL[before.seat.status], after: SEAT_LABEL[after.seat.status] });
+  log("A", {
+    status: response.status, label: `Vytvoriť (key ${A.last.key})`, cid: response.cid,
+    before: SEAT_LABEL[before.seat.status], after: SEAT_LABEL[after.seat.status],
+  });
 }
 
+// Retry: presne ten istý request aj kľúč → server vráti pôvodnú odpoveď, počet v DB sa nezmení
 async function aRetry() {
-  if (!A.last) { await aCreate(); }
+  if (!A.last) await aCreate();
   const before = await seatState();
-  const r = await api("POST", "/reservations", { body: A.last.body, headers: { "Idempotency-Key": A.last.key } });
+  const response = await createReservation(A.last.body, A.last.key);
   const after = await seatState();
-  renderA("Retry: žiadny nový nákup", r, `<div>rezervácie v DB: <b>${before.active_count} → ${after.active_count}</b></div>`);
+
+  renderA("Retry: žiadny nový nákup", response,
+    `<div>rezervácie v DB: <b>${before.active_count} → ${after.active_count}</b></div>`);
   renderSeat(after);
-  log("A", { status: r.status, label: `Retry (key ${A.last.key}) → ${r.json?.id ?? r.json?.code}`, cid: r.cid, before: `${before.active_count} rez.`, after: `${after.active_count} rez.` });
+  log("A", {
+    status: response.status, label: `Retry (key ${A.last.key}) → ${response.json?.id ?? response.json?.code}`, cid: response.cid,
+    before: `${before.active_count} rez.`, after: `${after.active_count} rez.`,
+  });
 }
 
+// Rovnaký kľúč, ale iný kupujúci → server to odmietne (kľúč nie je možné zneužiť)
 async function aMismatch() {
-  if (!A.last) { await aCreate(); }
+  if (!A.last) await aCreate();
   const before = await seatState();
-  const r = await api("POST", "/reservations", { body: { ...A.last.body, buyer_id: "buyer-boris" }, headers: { "Idempotency-Key": A.last.key } });
+  const response = await createReservation({ ...A.last.body, buyer_id: "buyer-boris" }, A.last.key);
   const after = await seatState();
-  renderA("Rovnaký kľúč, iný payload", r);
+
+  renderA("Rovnaký kľúč, iný payload", response);
   renderSeat(after);
-  log("A", { status: r.status, label: `Iný payload, key ${A.last.key}`, cid: r.cid, before: `${before.active_count} rez.`, after: `${after.active_count} rez.` });
+  log("A", {
+    status: response.status, label: `Iný payload, key ${A.last.key}`, cid: response.cid,
+    before: `${before.active_count} rez.`, after: `${after.active_count} rez.`,
+  });
 }
 
 async function aReset() {
-  const r = await api("POST", "/demo/reset");
+  const response = await api("POST", "/demo/reset");
   A.last = null;
   $("#a-rid").textContent = "—";
-  const st = await seatState();
-  renderSeat(st);
-  $("#a-result").innerHTML = `<div class="status-line">${badge(r.status, httpText(r.status))}<span class="big">A7 je VOĽNÉ</span></div>`;
-  log("A", { status: r.status, label: "Reset demo dát", cid: r.cid, after: SEAT_LABEL[st.seat.status] });
+  const state = await seatState();
+
+  renderSeat(state);
+  $("#a-result").innerHTML =
+    `<div class="status-line">${badge(response.status, httpText(response.status))}<span class="big">A7 je VOĽNÉ</span></div>`;
+  log("A", { status: response.status, label: "Reset demo dát", cid: response.cid, after: SEAT_LABEL[state.seat.status] });
 }
 
+// Jedna dlaždica súbehu (víťaz má zvýraznený okraj)
+function raceTile(buyerName, response) {
+  return `
+    <div class="tile ${response.status === 201 ? "accent" : ""}">
+      <div class="label">${buyerName}</div>
+      ${badge(response.status, httpText(response.status))}
+      <div class="small" style="margin-top:8px">${esc(response.json?.id || response.json?.code || "")}</div>
+      <div class="small muted">${esc(response.cid)} · ${response.ms} ms</div>
+    </div>`;
+}
+
+function renderRace(anna, boris) {
+  const winners = [anna, boris].filter((response) => response.status === 201).length;
+  $("#a-result").innerHTML = `
+    <div class="status-line"><span class="big">Súbeh: ${winners} víťaz</span></div>
+    <div class="tiles">${raceTile("Kupujúci Anna", anna)}${raceTile("Kupujúci Boris", boris)}</div>
+    <div class="small muted">Rozhodla PostgreSQL: unique index one_active_reservation_per_seat</div>`;
+}
+
+// Súbeh: Anna a Boris chcú to isté miesto v tom istom okamihu
 async function aRace() {
+  // 1) čistý štart
   await aReset();
   const before = await seatState();
-  const mk = (buyer) => api("POST", "/reservations", {
-    body: { event_id: "42", seat_id: "A7", buyer_id: buyer }, headers: { "Idempotency-Key": `race-${buyer}-${rnd()}` } });
-  // dve nezávislé HTTP požiadavky odoslané súčasne
-  const [r1, r2] = await Promise.all([mk("buyer-anna"), mk("buyer-boris")]);
+
+  // 2) dve nezávislé HTTP požiadavky naraz (každá s vlastným kľúčom) — rozhodne databáza
+  const buy = (buyer) => createReservation(
+    { event_id: "42", seat_id: "A7", buyer_id: buyer }, `race-${buyer}-${randomId()}`);
+  const [anna, boris] = await Promise.all([buy("buyer-anna"), buy("buyer-boris")]);
   const after = await seatState();
-  const row = (name, r) => `<div class="tile ${r.status === 201 ? "accent" : ""}"><div class="label">${name}</div>
-    ${badge(r.status, httpText(r.status))}<div class="small" style="margin-top:8px">${esc(r.json?.id || r.json?.code || "")}</div>
-    <div class="small muted">${esc(r.cid)} · ${r.ms} ms</div></div>`;
-  $("#a-result").innerHTML = `<div class="status-line"><span class="big">Súbeh: ${[r1, r2].filter((r) => r.status === 201).length} víťaz</span></div>
-    <div class="tiles">${row("Kupujúci Anna", r1)}${row("Kupujúci Boris", r2)}</div>
-    <div class="small muted">Rozhodla PostgreSQL: unique index one_active_reservation_per_seat</div>`;
+
+  // 3) zobraz obe odpovede: jedna 201, druhá 409
+  renderRace(anna, boris);
   renderSeat(after);
-  const win = r1.status === 201 ? r1 : r2;
-  if (win.json?.id) $("#a-rid").textContent = win.json.id;
-  log("A", { status: r1.status, label: "Súbeh — Anna", cid: r1.cid });
-  log("A", { status: r2.status, label: "Súbeh — Boris", cid: r2.cid, before: `${before.active_count} rez.`, after: `${after.active_count} rez.` });
+  const winner = anna.status === 201 ? anna : boris;
+  if (winner.json?.id) $("#a-rid").textContent = winner.json.id;
+
+  // 4) log
+  log("A", { status: anna.status, label: "Súbeh — Anna", cid: anna.cid });
+  log("A", {
+    status: boris.status, label: "Súbeh — Boris", cid: boris.cid,
+    before: `${before.active_count} rez.`, after: `${after.active_count} rez.`,
+  });
 }
 
 /* =====================================================================
    DEMO B — SOAP & gRPC
+   SOAP: formálny kontrakt (WSDL) a Fault. gRPC: deadline naozaj zruší volanie.
    ===================================================================== */
-const B = { soapBytes: null, grpcBytes: null };
+const B = { soapBytes: null, grpcBytes: null };   // veľkosti správ pre porovnanie bajtov
 
+// Zvýrazní slovo v (už escapovanom) XML
 function highlight(xml, word) {
   return esc(xml).replaceAll(esc(word), `<mark>${esc(word)}</mark>`);
 }
 
+function setSoapPanes(leftTitle, leftHtml, rightTitle, rightHtml) {
+  $("#b-left-title").textContent = leftTitle;
+  $("#b-right-title").textContent = rightTitle;
+  $("#b-left").innerHTML = leftHtml;
+  $("#b-right").innerHTML = rightHtml;
+}
+
+// WSDL: vľavo len výrez s operáciou CheckSeat, vpravo celý dokument
 async function bWsdl() {
-  const r = await api("GET", "/soap?wsdl", { raw: true });
-  $("#b-left-title").textContent = "WSDL (výrez — operácia)";
-  $("#b-right-title").textContent = "WSDL (celé)";
-  const opStart = r.text.indexOf("<wsdl:portType");
-  const opEnd = r.text.indexOf("</wsdl:binding>") + "</wsdl:binding>".length;
-  $("#b-left").innerHTML = highlight(r.text.slice(opStart, opEnd), "CheckSeat");
-  $("#b-right").innerHTML = highlight(r.text, "CheckSeat");
-  $("#b-soap-result").innerHTML = `<div class="status-line">${badge(r.status, httpText(r.status))}<span class="big">WSDL obsahuje operáciu CheckSeat</span></div>
-    <div class="small muted">${esc(r.cid)}</div>`;
-  log("B", { status: r.status, label: "SOAP: GET /soap?wsdl", cid: r.cid });
+  const response = await api("GET", "/soap?wsdl", { raw: true });
+  const wsdl = response.text;
+  const operationStart = wsdl.indexOf("<wsdl:portType");
+  const operationEnd = wsdl.indexOf("</wsdl:binding>") + "</wsdl:binding>".length;
+
+  setSoapPanes(
+    "WSDL (výrez — operácia)", highlight(wsdl.slice(operationStart, operationEnd), "CheckSeat"),
+    "WSDL (celé)", highlight(wsdl, "CheckSeat"));
+  $("#b-soap-result").innerHTML = `
+    <div class="status-line">${badge(response.status, httpText(response.status))}<span class="big">WSDL obsahuje operáciu CheckSeat</span></div>
+    <div class="small muted">${esc(response.cid)}</div>`;
+  log("B", { status: response.status, label: "SOAP: GET /soap?wsdl", cid: response.cid });
 }
 
+// SOAP volanie CheckSeat; s invalid=true server vráti SOAP Fault (HTTP 500)
 async function bSoap(invalid) {
-  const r = await api("GET", `/demo/rpc/soap?seat=A7${invalid ? "&invalid=true" : ""}`);
-  const j = r.json;
-  $("#b-left-title").textContent = "Request XML";
-  $("#b-right-title").textContent = j.is_fault ? "Response XML — SOAP Fault" : "Response XML";
-  $("#b-left").innerHTML = highlight(j.request_xml, "CheckSeat");
-  $("#b-right").innerHTML = highlight(j.response_xml, j.is_fault ? "Fault" : "available");
-  const avail = /<tns:available>(\w+)<\/tns:available>/.exec(j.response_xml)?.[1];
-  const fault = /<faultstring>([^<]*)<\/faultstring>/.exec(j.response_xml)?.[1];
-  $("#b-soap-result").innerHTML = `<div class="status-line">${badge(j.http_status, j.is_fault ? "SOAP Fault (HTTP 500)" : "HTTP 200")}
-      <span class="big">${j.is_fault ? esc(fault) : `available = ${esc(avail)}`}</span></div>
-    <div class="small muted">body ${j.request_body_bytes} B → ${j.response_body_bytes} B · ${esc(j.correlation_id)}</div>`;
-  if (!invalid) { B.soapBytes = j; renderBytes(); }
-  log("B", { status: j.http_status, label: invalid ? "SOAP: neplatný request → Fault" : `SOAP CheckSeat → available=${avail}`, cid: j.correlation_id });
+  // 1) server zavolá SOAP službu a vráti nám request aj response XML
+  const response = await api("GET", `/demo/rpc/soap?seat=A7${invalid ? "&invalid=true" : ""}`);
+  const call = response.json;
+
+  // 2) obe XML vedľa seba
+  setSoapPanes(
+    "Request XML", highlight(call.request_xml, "CheckSeat"),
+    call.is_fault ? "Response XML — SOAP Fault" : "Response XML",
+    highlight(call.response_xml, call.is_fault ? "Fault" : "available"));
+
+  // 3) vytiahni výsledok z XML odpovede
+  const available = /<tns:available>(\w+)<\/tns:available>/.exec(call.response_xml)?.[1];
+  const faultString = /<faultstring>([^<]*)<\/faultstring>/.exec(call.response_xml)?.[1];
+  $("#b-soap-result").innerHTML = `
+    <div class="status-line">
+      ${badge(call.http_status, call.is_fault ? "SOAP Fault (HTTP 500)" : "HTTP 200")}
+      <span class="big">${call.is_fault ? esc(faultString) : `available = ${esc(available)}`}</span>
+    </div>
+    <div class="small muted">body ${call.request_body_bytes} B → ${call.response_body_bytes} B · ${esc(call.correlation_id)}</div>`;
+
+  // 4) veľkosť platnej správy si zapamätáme na porovnanie s gRPC
+  if (!invalid) { B.soapBytes = call; renderBytes(); }
+  log("B", {
+    status: call.http_status,
+    label: invalid ? "SOAP: neplatný request → Fault" : `SOAP CheckSeat → available=${available}`,
+    cid: call.correlation_id,
+  });
 }
 
-async function bGrpc(delay, deadline) {
-  const q = `/demo/rpc/grpc?seat=A7&delay_ms=${delay}${deadline ? `&deadline_ms=${deadline}` : ""}`;
-  const r = await api("GET", q);
-  const j = r.json;
-  const okCall = j.ok;
-  $("#b-grpc-result").innerHTML = `<div class="status-line">${badge(okCall ? 200 : 500, j.code)}
-      <span class="big">${okCall ? `available = ${j.reply.available} (${esc(j.reply.status)})` : esc(j.details)}</span></div>
-    <div>deadline <b>${deadline ? deadline + " ms" : "—"}</b> · klient čakal <b>${j.client_elapsed_ms} ms</b>${okCall ? ` · server ${j.reply.server_elapsed_ms} ms` : ""}</div>
-    <div class="small muted">${esc(j.correlation_id)}</div>`;
-  renderTimeline(delay, deadline, j);
-  if (okCall && !delay) { B.grpcBytes = j; renderBytes(); }
-  log("B", { status: okCall ? 200 : 504, label: `gRPC CheckSeat delay=${delay} deadline=${deadline ?? "—"} → ${j.code}`, cid: j.correlation_id });
+function grpcUrl(delayMs, deadlineMs) {
+  return `/demo/rpc/grpc?seat=A7&delay_ms=${delayMs}${deadlineMs ? `&deadline_ms=${deadlineMs}` : ""}`;
 }
 
-function renderTimeline(delay, deadline, j) {
-  const scale = Math.max(delay, deadline || 0, j.client_elapsed_ms, 100) * 1.15;
-  const pct = (ms) => Math.min(100, (ms / scale) * 100).toFixed(1) + "%";
-  const serverWanted = delay + (j.reply?.server_elapsed_ms ? j.reply.server_elapsed_ms - delay : 0);
+function renderGrpcResult(call, deadlineMs) {
+  const answer = call.ok ? `available = ${call.reply.available} (${esc(call.reply.status)})` : esc(call.details);
+  const serverTime = call.ok ? ` · server ${call.reply.server_elapsed_ms} ms` : "";
+  $("#b-grpc-result").innerHTML = `
+    <div class="status-line">
+      ${badge(call.ok ? 200 : 500, call.code)}
+      <span class="big">${answer}</span>
+    </div>
+    <div>deadline <b>${deadlineMs ? deadlineMs + " ms" : "—"}</b> · klient čakal <b>${call.client_elapsed_ms} ms</b>${serverTime}</div>
+    <div class="small muted">${esc(call.correlation_id)}</div>`;
+}
+
+// gRPC CheckSeat: server umelo spomalíme (delay) a klientovi dáme deadline
+async function bGrpc(delayMs, deadlineMs) {
+  // 1) volanie cez backend (gRPC klient beží na serveri)
+  const response = await api("GET", grpcUrl(delayMs, deadlineMs));
+  const call = response.json;
+
+  // 2) výsledok + časová os „server pracuje vs. klient čaká“
+  renderGrpcResult(call, deadlineMs);
+  renderTimeline(delayMs, deadlineMs, call);
+
+  // 3) bajty berieme len z rýchleho úspešného volania
+  if (call.ok && !delayMs) { B.grpcBytes = call; renderBytes(); }
+  log("B", {
+    status: call.ok ? 200 : 504,
+    label: `gRPC CheckSeat delay=${delayMs} deadline=${deadlineMs ?? "—"} → ${call.code}`,
+    cid: call.correlation_id,
+  });
+}
+
+// Časová os: horný pruh = práca servera, dolný = čakanie klienta, čiarkovaná čiara = deadline
+function renderTimeline(delayMs, deadlineMs, call) {
+  const scaleMs = Math.max(delayMs, deadlineMs || 0, call.client_elapsed_ms, 100) * 1.15;
+  const pct = (ms) => Math.min(100, (ms / scaleMs) * 100).toFixed(1) + "%";
+  const serverWorkMs = call.reply?.server_elapsed_ms || delayMs;   // ak server nestihol odpovedať, ukážeme zadaný delay
+
+  const deadlineLine = deadlineMs
+    ? `<div class="deadline" style="left:${pct(deadlineMs)}"><span>deadline ${deadlineMs} ms</span></div>`
+    : "";
+  const verdict = call.ok
+    ? "Stihlo sa pred deadline."
+    : "Klient prestal čakať pri deadline, gRPC zrušil prácu aj na serveri.";
+
   $("#b-timeline").innerHTML = `
     <div class="timeline">
-      <span class="tlabel tl-srv">Server: umelá práca ~${Math.round(serverWanted)} ms</span>
-      <div class="track srv"><div class="bar srv" style="width:${pct(Math.max(serverWanted, 2))}"></div></div>
-      <span class="tlabel tl-cli">Klient: ${j.client_elapsed_ms} ms → ${esc(j.code)}</span>
-      <div class="track cli"><div class="bar cli ${j.ok ? "" : "err"}" style="width:${pct(j.client_elapsed_ms)}"></div></div>
-      ${deadline ? `<div class="deadline" style="left:${pct(deadline)}"><span>deadline ${deadline} ms</span></div>` : ""}
+      <span class="tlabel tl-srv">Server: umelá práca ~${Math.round(serverWorkMs)} ms</span>
+      <div class="track srv">
+        <div class="bar srv" style="width:${pct(Math.max(serverWorkMs, 2))}"></div>
+      </div>
+      <span class="tlabel tl-cli">Klient: ${call.client_elapsed_ms} ms → ${esc(call.code)}</span>
+      <div class="track cli">
+        <div class="bar cli ${call.ok ? "" : "err"}" style="width:${pct(call.client_elapsed_ms)}"></div>
+      </div>
+      ${deadlineLine}
     </div>
-    <p class="small" style="margin-top:8px">${j.ok ? "Stihlo sa pred deadline." : "Klient prestal čakať pri deadline, gRPC zrušil prácu aj na serveri."}</p>`;
+    <p class="small" style="margin-top:8px">${verdict}</p>`;
 }
 
+// SOAP XML vs. protobuf — len pre tieto konkrétne správy
 function renderBytes() {
-  const s = B.soapBytes, g = B.grpcBytes;
-  $("#b-bytes").innerHTML = `SOAP XML body: <b>${s ? `${s.request_body_bytes} / ${s.response_body_bytes} B` : "—"}</b> ·
-    gRPC protobuf: <b>${g ? `${g.request_protobuf_bytes} / ${g.response_protobuf_bytes} B` : "—"}</b>
+  const soap = B.soapBytes;
+  const grpc = B.grpcBytes;
+  const soapSizes = soap ? `${soap.request_body_bytes} / ${soap.response_body_bytes} B` : "—";
+  const grpcSizes = grpc ? `${grpc.request_protobuf_bytes} / ${grpc.response_protobuf_bytes} B` : "—";
+  $("#b-bytes").innerHTML = `
+    SOAP XML body: <b>${soapSizes}</b> ·
+    gRPC protobuf: <b>${grpcSizes}</b>
     <div class="muted">request / response, bez hlavičiek. Platí len pre tieto správy, nie je to benchmark.</div>`;
 }
 
 /* =====================================================================
    DEMO C — GraphQL
+   Prehliadač posiela iba TEXT query. SQL robí výhradne server.
    ===================================================================== */
 const DEMO_QUERY = '{ event(id: "42") { seats(limit: 100) { id price { amount currency } } } }';
-const C = { naive: null, batch: null };
+const lastResult = { naive: null, batch: null };      // na porovnanie JSON-u
 
-function renderSql(stmt) {
-  const p = stmt.params || {};
-  let sql = stmt.sql.replace(/%\((\w+)\)s/g, (_, k) => (typeof p[k] === "number" ? p[k] : `'${p[k] ?? "…"}'`));
-  // dlhý IN zoznam skrátime: IN ('A1', 'A2', 'A3', … 100 hodnôt)
-  sql = sql.replace(/IN \(([^)]*)\)/, (m, inner) => {
-    const parts = inner.split(", ");
-    return parts.length > 4 ? `IN (${parts.slice(0, 3).join(", ")}, … ${parts.length} hodnôt)` : m;
-  });
-  return sql.replace("SELECT seat_id, amount_cents, currency, internal_cost_cents", "SELECT …")
-            .replace("SELECT seat_id, row_label, seat_number", "SELECT …");
+// 1) Pošli query na server: POST /graphql (batching) alebo /graphql/naive
+async function sendGraphQL(mode, query, headers = {}) {
+  const url = mode === "naive" ? "/graphql/naive" : "/graphql";
+  const response = await api("POST", url, { body: { query }, headers });
+  return { ...response.json, correlationId: response.cid };
 }
 
-function sqlPreview(stmts) {
-  const shown = stmts.slice(0, 3).map((s, i) => `${i + 1}. ${renderSql(s)}`);
-  if (stmts.length > 3) shown.push(`… +${stmts.length - 3} ďalších`);
-  return shown.join("\n") + `\n\n= ${stmts.length} SQL`;
-}
-
+// 2) Tlačidlá „Naivný resolver“ / „Batching“
 async function cRun(mode, query = DEMO_QUERY, headers = {}) {
-  const path = mode === "naive" ? "/graphql/naive" : "/graphql";
-  const r = await api("POST", path, { body: { query }, headers });
-  const j = r.json;
-  const ext = j.extensions;
-  if (query === DEMO_QUERY && !j.errors) {
-    C[mode] = j;
-    $(`#c-${mode}-count`).textContent = ext.sql.count;
-    $(`#c-${mode}-ms`).textContent = `${ext.durationMs} ms (orientačne)`;
-    $(`#c-${mode}-log`).textContent = sqlPreview(ext.sql.statements);
+  const result = await sendGraphQL(mode, query, headers);
+  const sql = result.extensions.sql;           // skutočné SQL príkazy, ktoré server poslal do DB
+
+  if (query === DEMO_QUERY && !result.errors) {
+    lastResult[mode] = result;
+    $(`#c-${mode}-count`).textContent = sql.count;                       // veľké číslo 101 / 2
+    $(`#c-${mode}-ms`).textContent = `${result.extensions.durationMs} ms (orientačne)`;
+    $(`#c-${mode}-log`).textContent = sqlPreview(sql.statements);        // výpis SQL logu
   }
-  log("C", { status: j.errors ? 400 : r.status, label: `${mode === "naive" ? "Naivne" : "Batching"}: ${ext.sql.count} SQL${j.errors ? " · " + j.errors[0].message : ""}`, cid: r.cid });
-  return j;
+
+  const name = mode === "naive" ? "Naivne" : "Batching";
+  const error = result.errors ? ` · ${result.errors[0].message}` : "";
+  log("C", { status: result.errors ? 400 : 200, label: `${name}: ${sql.count} SQL${error}`, cid: result.correlationId });
+  return result;
 }
 
+// 3) Rovnaký JSON? Porovnáme odpovede oboch režimov
 function cSame() {
-  if (C.naive && C.batch) {
-    const same = JSON.stringify(C.naive.data) === JSON.stringify(C.batch.data);
+  const { naive, batch } = lastResult;
+  if (naive && batch) {
+    const same = JSON.stringify(naive.data) === JSON.stringify(batch.data);
     $("#c-same").innerHTML = same ? '<span class="badge ok">ÁNO</span>' : '<span class="badge err">NIE</span>';
   }
   $("#c-result").hidden = true;
 }
 
+// 4) Ukážky ochrany: príliš veľký limit, pole bez oprávnenia
 async function cError(kind) {
-  const q = kind === "limit"
+  const query = kind === "limit"
     ? '{ event(id: "42") { seats(limit: 500) { id } } }'
     : '{ event(id: "42") { seats(limit: 1) { id price { internalCost } } } }';
-  $("#c-query").textContent = q;
-  const j = await cRun("batch", q);
+  $("#c-query").textContent = query;
+
+  const result = await cRun("batch", query);
+  const message = result.errors?.[0]?.message || "bez chyby";
   $("#c-result").hidden = false;
-  $("#c-result").innerHTML = `<div class="status-line">${badge(400, "Zamietnuté")}<span class="big">${esc(j.errors?.[0]?.message || "bez chyby")}</span></div>
-    <div class="small muted">SQL dotazov: ${j.extensions.sql.count}</div>`;
+  $("#c-result").innerHTML = `
+    <div class="status-line">${badge(400, "Zamietnuté")}<span class="big">${esc(message)}</span></div>
+    <div class="small muted">SQL dotazov: ${result.extensions.sql.count}</div>`;
+}
+
+// Tlačidlá naivne / batching vždy pracujú s ukážkovou query
+function showDemoQuery() {
+  $("#c-query").textContent = DEMO_QUERY;
+}
+
+// SQL log čitateľne: dosadí hodnoty parametrov a skráti dlhý IN (…) zoznam
+function renderSql(statement) {
+  const values = statement.params || {};
+  let sql = statement.sql.replace(/%\((\w+)\)s/g, (_, key) =>
+    typeof values[key] === "number" ? values[key] : `'${values[key] ?? "…"}'`);
+  sql = sql.replace(/IN \(([^)]*)\)/, (match, inner) => {
+    const items = inner.split(", ");
+    return items.length > 4 ? `IN (${items.slice(0, 3).join(", ")}, … ${items.length} hodnôt)` : match;
+  });
+  return sql.replace(/SELECT seat_id, [a-z_, ]+? FROM/, "SELECT … FROM");
+}
+
+function sqlPreview(statements) {
+  const lines = statements.slice(0, 3).map((statement, i) => `${i + 1}. ${renderSql(statement)}`);
+  if (statements.length > 3) lines.push(`… +${statements.length - 3} ďalších`);
+  return lines.join("\n") + `\n\n= ${statements.length} SQL`;
 }
 
 /* =====================================================================
    DEMO D — Webhook & WebSocket
+   Provider pošle podpísaný webhook → DB zmení stav → server to pushne cez WebSocket
+   všetkým pripojeným klientom. Po (opätovnom) pripojení si klient stiahne snapshot.
    ===================================================================== */
 const D = { rid: params.get("rid") || null, clients: {} };
 
-function wsUrl(name) {
-  return `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws?client=${encodeURIComponent(name)}`;
+function wsUrl(clientName) {
+  const scheme = location.protocol === "https:" ? "wss" : "ws";
+  return `${scheme}://${location.host}/ws?client=${encodeURIComponent(clientName)}`;
+}
+
+/* ---------- WebSocket klient (karta „Klient A / B“) ---------- */
+function clientCardHtml(name) {
+  return `
+    <header>
+      <b>Klient ${esc(name)}</b>
+      <button class="btn ghost" style="padding:6px 12px;font-size:.85rem">Odpojiť</button>
+    </header>
+    <div class="small"><span class="conn">ODPOJENÝ</span> · rezervácia <b class="rid">—</b></div>
+    <div class="rstatus">—</div>
+    <div class="note"></div>`;
 }
 
 function makeClient(name) {
+  // 1) karta klienta v DOM
   const el = document.createElement("div");
   el.className = "client";
-  el.innerHTML = `<header><b>Klient ${esc(name)}</b><button class="btn ghost" style="padding:6px 12px;font-size:.85rem">Odpojiť</button></header>
-    <div class="small"><span class="conn">ODPOJENÝ</span> · rezervácia <b class="rid">—</b></div>
-    <div class="rstatus">—</div><div class="note"></div>`;
+  el.innerHTML = clientCardHtml(name);
   $("#d-clients").append(el);
-  const c = { name, el, ws: null, wantConnected: true };
-  el.querySelector("button").addEventListener("click", () => {
-    if (c.ws && c.ws.readyState <= 1) { c.wantConnected = false; c.ws.close(); }
-    else { c.wantConnected = true; connect(c); }
-  });
-  D.clients[name] = c;
-  connect(c);
+
+  // 2) tlačidlo Odpojiť / Pripojiť — ukážka, že odpojený klient správy nedostáva
+  const client = { name, el, ws: null, wantConnected: true };
+  el.querySelector("button").addEventListener("click", () => toggleConnection(client));
+
+  // 3) zaregistruj a pripoj
+  D.clients[name] = client;
+  connect(client);
 }
 
-function setClient(c, status, note) {
-  if (status) c.el.querySelector(".rstatus").textContent = status;
-  if (note) c.el.querySelector(".note").textContent = `${timeNow()} — ${note}`;
-  c.el.querySelector(".rid").textContent = D.rid || "—";
-}
-
-async function snapshot(c, why) {
-  if (!D.rid) {
-    const st = await seatState();
-    D.rid = st?.active_reservations?.[0]?.id || null;
+function toggleConnection(client) {
+  const isOpenOrConnecting = client.ws && client.ws.readyState <= 1;
+  if (isOpenOrConnecting) {
+    client.wantConnected = false;
+    client.ws.close();
+  } else {
+    client.wantConnected = true;
+    connect(client);
   }
-  if (!D.rid) { setClient(c, "—", `${why}: žiadna aktívna rezervácia`); return; }
-  const r = await api("GET", `/reservations/${D.rid}`);
-  setClient(c, r.json?.status || "?", `${why} → snapshot GET /reservations/${D.rid}`);
-  log("D", { status: r.status, label: `Klient ${c.name}: snapshot po pripojení → ${r.json?.status}`, cid: r.cid });
 }
 
-function connect(c) {
-  const ws = new WebSocket(wsUrl(c.name));
-  c.ws = ws;
+// Aktualizuje veľký stav, poznámku s časom a reservation_id na karte klienta
+function setClient(client, status, note) {
+  if (status) client.el.querySelector(".rstatus").textContent = status;
+  if (note) client.el.querySelector(".note").textContent = `${timeNow()} — ${note}`;
+  client.el.querySelector(".rid").textContent = D.rid || "—";
+}
+
+function setConnectedUi(client, connected) {
+  client.el.classList.toggle("connected", connected);
+  client.el.querySelector(".conn").textContent = connected ? "PRIPOJENÝ" : "ODPOJENÝ";
+  client.el.querySelector("header button").textContent = connected ? "Odpojiť" : "Pripojiť";
+}
+
+// Snapshot po pripojení: WebSocket nedoručí, čo sa stalo počas výpadku → stav si dotiahneme cez REST
+async function snapshot(client, reason) {
+  if (!D.rid) {
+    const state = await seatState();
+    D.rid = state?.active_reservations?.[0]?.id || null;
+  }
+  if (!D.rid) {
+    setClient(client, "—", `${reason}: žiadna aktívna rezervácia`);
+    return;
+  }
+  const response = await api("GET", `/reservations/${D.rid}`);
+  setClient(client, response.json?.status || "?", `${reason} → snapshot GET /reservations/${D.rid}`);
+  log("D", { status: response.status, label: `Klient ${client.name}: snapshot po pripojení → ${response.json?.status}`, cid: response.cid });
+}
+
+// Správy, ktoré server pushuje cez WebSocket
+function handleMessage(client, message) {
+  if (message.type === "reservation.created" || message.type === "reservation.confirmed") {
+    if (message.reservation.seat_id === "A7") D.rid = message.reservation.id;
+    setClient(client, message.reservation.status, `WebSocket: ${message.type}`);
+  } else if (message.type === "demo.reset") {
+    D.rid = null;
+    setClient(client, "—", "WebSocket: demo.reset");
+  }
+  // ostatné typy (napr. hello) iba ignorujeme
+}
+
+function connect(client) {
+  const ws = new WebSocket(wsUrl(client.name));
+  client.ws = ws;
+
   ws.onopen = () => {
-    c.el.classList.add("connected");
-    c.el.querySelector(".conn").textContent = "PRIPOJENÝ";
-    c.el.querySelector("header button").textContent = "Odpojiť";
-    snapshot(c, "Pripojený");
+    setConnectedUi(client, true);
+    snapshot(client, "Pripojený");
   };
-  ws.onmessage = (ev) => {
-    const m = JSON.parse(ev.data);
-    if (m.type === "reservation.created" || m.type === "reservation.confirmed") {
-      if (m.reservation.seat_id === "A7") D.rid = m.reservation.id;
-      setClient(c, m.reservation.status, `WebSocket: ${m.type}`);
-    } else if (m.type === "demo.reset") {
-      D.rid = null;
-      setClient(c, "—", "WebSocket: demo.reset");
-    }
-  };
+  ws.onmessage = (event) => handleMessage(client, JSON.parse(event.data));
   ws.onclose = () => {
-    c.el.classList.remove("connected");
-    c.el.querySelector(".conn").textContent = "ODPOJENÝ";
-    c.el.querySelector("header button").textContent = "Pripojiť";
-    setClient(c, null, c.wantConnected ? "Spojenie stratené" : "Odpojený — správy nedostáva");
+    setConnectedUi(client, false);
+    setClient(client, null, client.wantConnected ? "Spojenie stratené" : "Odpojený — správy nedostáva");
   };
 }
 
-function renderWebhook(title, r) {
-  const j = r.json || {};
-  const recv = j.received || {};
-  const b = recv.body || {};
-  const sig = j.sent?.headers?.["TicketFlow-Signature"];
-  $("#d-sent").textContent = j.sent
-    ? `POST /webhooks/payment\nTicketFlow-Signature: ${sig ? sig.slice(0, 32) + "…" : "(chýba)"}\n\n${JSON.stringify(JSON.parse(j.sent.raw_body), null, 1)}`
-    : r.text;
-  $("#d-recv").textContent = `HTTP ${recv.status}\n\n` + JSON.stringify(
-    Object.fromEntries(Object.entries(recv.body || {}).filter(([k]) => ["result", "outcome", "code", "event_id", "status_before", "status_after", "detail"].includes(k))), null, 1);
-  const st = recv.status ?? r.status;
-  const resultText = b.result === "DUPLICATE_IGNORED" ? "Duplicita — prijatá bezpečne, bez zmeny"
-    : b.result === "PROCESSED" ? `Spracované: ${b.outcome}` : b.code === "INVALID_SIGNATURE" ? "Zlý podpis — odmietnuté, DB bez zmeny"
-    : b.code === "MISSING_SIGNATURE" ? "Bez podpisu — odmietnuté" : b.code || b.detail || "—";
-  $("#d-result").innerHTML = `<div class="status-line">${badge(st, httpText(st))}<span class="big">${esc(resultText)}</span></div>
-    <div>${esc(title)}${b.status_before ? ` · stav <b>${esc(b.status_before)} → ${esc(b.status_after)}</b>` : ""}${b.websocket_deliveries != null ? ` · WebSocket doručenia: <b>${b.websocket_deliveries}</b>` : ""}</div>
-    <div class="small muted">${esc(j.correlation_id || r.cid)}</div>`;
+/* ---------- Webhook: čo provider poslal a čo príjemca odpovedal ---------- */
+const RECEIVER_FIELDS = ["result", "outcome", "code", "event_id", "status_before", "status_after", "detail"];
+
+// Ľavý panel: HTTP request od providera (podpis skrátený, telo naformátované)
+function formatSentRequest(sent, fallbackText) {
+  if (!sent) return fallbackText;
+  const signature = sent.headers?.["TicketFlow-Signature"];
+  const signatureText = signature ? signature.slice(0, 32) + "…" : "(chýba)";
+  return `POST /webhooks/payment\nTicketFlow-Signature: ${signatureText}\n\n` +
+    JSON.stringify(JSON.parse(sent.raw_body), null, 1);
 }
 
+// Pravý panel: odpoveď príjemcu, len zaujímavé polia
+function formatReceiverReply(received) {
+  const fields = Object.entries(received.body || {}).filter(([key]) => RECEIVER_FIELDS.includes(key));
+  return `HTTP ${received.status}\n\n` + JSON.stringify(Object.fromEntries(fields), null, 1);
+}
+
+// Ľudská veta k výsledku: spracované / duplicita / zlý podpis / bez podpisu
+function webhookOutcome(body) {
+  if (body.result === "DUPLICATE_IGNORED") return "Duplicita — prijatá bezpečne, bez zmeny";
+  if (body.result === "PROCESSED") return `Spracované: ${body.outcome}`;
+  if (body.code === "INVALID_SIGNATURE") return "Zlý podpis — odmietnuté, DB bez zmeny";
+  if (body.code === "MISSING_SIGNATURE") return "Bez podpisu — odmietnuté";
+  return body.code || body.detail || "—";
+}
+
+function renderWebhook(title, response) {
+  const data = response.json || {};
+  const received = data.received || {};
+  const body = received.body || {};
+  const status = received.status ?? response.status;
+
+  // 1) request a odpoveď vedľa seba
+  $("#d-sent").textContent = formatSentRequest(data.sent, response.text);
+  $("#d-recv").textContent = formatReceiverReply(received);
+
+  // 2) zmena stavu v DB a počet doručení cez WebSocket
+  const stateChange = body.status_before
+    ? ` · stav <b>${esc(body.status_before)} → ${esc(body.status_after)}</b>`
+    : "";
+  const deliveries = body.websocket_deliveries != null
+    ? ` · WebSocket doručenia: <b>${body.websocket_deliveries}</b>`
+    : "";
+
+  // 3) výsledková karta
+  $("#d-result").innerHTML = `
+    <div class="status-line">${badge(status, httpText(status))}<span class="big">${esc(webhookOutcome(body))}</span></div>
+    <div>${esc(title)}${stateChange}${deliveries}</div>
+    <div class="small muted">${esc(data.correlation_id || response.cid)}</div>`;
+}
+
+// Aktuálny stav rezervácie cez REST (alebo undefined, ak žiadna nie je)
+async function reservationStatus(reservationId) {
+  if (!reservationId) return undefined;
+  const response = await api("GET", `/reservations/${reservationId}`);
+  return response.json?.status;
+}
+
+// Čistý štart: reset + nová PENDING rezervácia
 async function dCreate() {
   await api("POST", "/demo/reset");
-  const r = await api("POST", "/reservations", { body: { event_id: "42", seat_id: "A7", buyer_id: "buyer-demo-d" }, headers: { "Idempotency-Key": "d-" + rnd() } });
-  D.rid = r.json?.id || null;
-  Object.values(D.clients).forEach((c) => setClient(c));
-  $("#d-result").innerHTML = `<div class="status-line">${badge(r.status, httpText(r.status))}<span class="big">${esc(D.rid)} je PENDING</span></div><div class="small muted">${esc(r.cid)}</div>`;
-  log("D", { status: r.status, label: `Vytvorená rezervácia ${D.rid}`, cid: r.cid, before: "VOĽNÉ", after: "PENDING" });
+  const response = await createReservation(
+    { event_id: "42", seat_id: "A7", buyer_id: "buyer-demo-d" }, "d-" + randomId());
+  D.rid = response.json?.id || null;
+  Object.values(D.clients).forEach((client) => setClient(client));
+
+  $("#d-result").innerHTML = `
+    <div class="status-line">${badge(response.status, httpText(response.status))}<span class="big">${esc(D.rid)} je PENDING</span></div>
+    <div class="small muted">${esc(response.cid)}</div>`;
+  log("D", { status: response.status, label: `Vytvorená rezervácia ${D.rid}`, cid: response.cid, before: "VOĽNÉ", after: "PENDING" });
 }
 
+// Požiada simulovaného providera o webhook (platný / replay / zlý podpis / bez podpisu)
 async function dAction(action, title) {
+  // 1) bez rezervácie nie je čo zaplatiť (replay posiela už odoslaný event)
   if (!D.rid && action !== "replay") await dCreate();
-  const before = D.rid ? (await api("GET", `/reservations/${D.rid}`)).json?.status : undefined;
-  const r = await api("POST", `/demo/provider/${action}`, { body: { reservation_id: D.rid } });
-  const after = D.rid ? (await api("GET", `/reservations/${D.rid}`)).json?.status : undefined;
-  renderWebhook(title, r);
-  log("D", { status: r.json?.received?.status ?? r.status, label: title, cid: r.json?.correlation_id || r.cid, before, after });
+
+  // 2) stav pred → webhook → stav po
+  const before = await reservationStatus(D.rid);
+  const response = await api("POST", `/demo/provider/${action}`, { body: { reservation_id: D.rid } });
+  const after = await reservationStatus(D.rid);
+
+  // 3) zobraz a zaloguj
+  renderWebhook(title, response);
+  log("D", {
+    status: response.json?.received?.status ?? response.status, label: title,
+    cid: response.json?.correlation_id || response.cid, before, after,
+  });
 }
 
-/* ---------- wiring ---------- */
+/* =====================================================================
+   TLAČIDLÁ — data-action v index.html → funkcia
+   ===================================================================== */
 const ACTIONS = {
-  "a-create": aCreate, "a-retry": aRetry, "a-mismatch": aMismatch, "a-race": aRace, "a-reset": aReset,
-  "b-wsdl": bWsdl, "b-soap": () => bSoap(false), "b-soap-fault": () => bSoap(true),
-  "b-grpc": () => bGrpc(0, null), "b-grpc-slow": () => bGrpc(800, 200), "b-grpc-ok-slow": () => bGrpc(100, 2000),
-  "c-naive": async () => { $("#c-query").textContent = DEMO_QUERY; await cRun("naive"); cSame(); },
-  "c-batch": async () => { $("#c-query").textContent = DEMO_QUERY; await cRun("batch"); cSame(); },
-  "c-compare": async () => { $("#c-query").textContent = DEMO_QUERY; await cRun("naive"); await cRun("batch"); cSame(); },
-  "c-limit": () => cError("limit"), "c-priv": () => cError("priv"),
+  // A — REST
+  "a-create": aCreate,
+  "a-retry": aRetry,
+  "a-mismatch": aMismatch,
+  "a-race": aRace,
+  "a-reset": aReset,
+
+  // B — SOAP & gRPC  (gRPC: delay servera, deadline klienta)
+  "b-wsdl": bWsdl,
+  "b-soap": () => bSoap(false),
+  "b-soap-fault": () => bSoap(true),
+  "b-grpc": () => bGrpc(0, null),
+  "b-grpc-slow": () => bGrpc(800, 200),
+  "b-grpc-ok-slow": () => bGrpc(100, 2000),
+
+  // C — GraphQL
+  "c-naive": async () => { showDemoQuery(); await cRun("naive"); cSame(); },
+  "c-batch": async () => { showDemoQuery(); await cRun("batch"); cSame(); },
+  "c-compare": async () => { showDemoQuery(); await cRun("naive"); await cRun("batch"); cSame(); },
+  "c-limit": () => cError("limit"),
+  "c-priv": () => cError("priv"),
+
+  // D — Webhook & WebSocket
   "d-create": dCreate,
   "d-pay": () => dAction("payment", "Odoslať platbu (platný podpis)"),
   "d-replay": () => dAction("replay", "Zopakovať webhook (rovnaké event id)"),
   "d-bad": () => dAction("bad-signature", "Pokaziť podpis"),
   "d-unsigned": () => dAction("unsigned", "Bez podpisu"),
 };
-document.querySelectorAll("[data-action]").forEach((btn) =>
-  btn.addEventListener("click", () => busy(btn, async () => {
-    const id = btn.dataset.action;
-    await ACTIONS[id]();
-  })));
 
+document.querySelectorAll("[data-action]").forEach((button) =>
+  button.addEventListener("click", () => busy(button, () => ACTIONS[button.dataset.action]())));
 
-/* ---------- init ---------- */
+document.querySelectorAll("nav.tabs button").forEach((button) =>
+  button.addEventListener("click", () => selectTab(button.dataset.tab)));
+
+document.querySelectorAll(".subtabs button").forEach((button) =>
+  button.addEventListener("click", () => selectSubtab(button)));
+
+/* =====================================================================
+   ŠTART + AUTORUN
+   ?autorun=1 prehrá scenár danej karty (screenshoty a nácvik), na konci title = AUTORUN_DONE
+   ===================================================================== */
+const AUTORUN_PLANS = {
+  A: ["a-reset", "a-create", "a-retry", "a-race"],
+  B: params.get("sub") === "grpc" ? ["a-reset", "b-grpc", "b-grpc-slow"] : ["a-reset", "b-soap"],
+  C: ["a-reset", "c-naive", "c-batch"],
+  D: ["d-create", "d-bad", "d-pay", "d-replay"],
+};
+
+async function autorun(tab) {
+  if (tab === "B" && params.get("sub") === "grpc") document.querySelector('.subtabs [data-sub="grpc"]').click();
+  await wait(500);
+  for (const actionId of AUTORUN_PLANS[tab]) {
+    await ACTIONS[actionId]();
+    await wait(150);
+  }
+  document.title = "AUTORUN_DONE";
+}
+
 (async function init() {
+  // 1) karta z URL, health čipy (každých 10 s), počiatočný stav miesta A7
   selectTab(params.get("tab") || "A");
   refreshHealth();
   setInterval(refreshHealth, 10000);
   renderSeat(await seatState());
-  api("GET", "/demo/contracts/proto", { raw: true }).then((r) => ($("#b-proto").textContent = r.text));
-  renderBytes();
-  const solo = params.get("solo");
-  if (solo) makeClient(solo); else { makeClient("A"); makeClient("B"); }
-  if (solo) $("#d-open-second").style.display = "none";
 
-  // ?autorun=1 — prehrá scenár danej karty (na screenshoty a nácvik)
-  if (params.get("autorun")) {
-    const tab = params.get("tab") || "A";
-    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-    const run = async (id) => { await ACTIONS[id](); await wait(150); };
-    const plans = {
-      A: ["a-reset", "a-create", "a-retry", "a-race"],
-      B: params.get("sub") === "grpc" ? ["a-reset", "b-grpc", "b-grpc-slow"] : ["a-reset", "b-soap"],
-      C: ["a-reset", "c-naive", "c-batch"],
-      D: ["d-create", "d-bad", "d-pay", "d-replay"],
-    };
-    if (tab === "B" && params.get("sub") === "grpc") document.querySelector('.subtabs [data-sub="grpc"]').click();
-    await wait(500);
-    for (const id of plans[tab]) await run(id);
-    document.title = "AUTORUN_DONE";
+  // 2) Demo B: .proto kontrakt a prázdne porovnanie bajtov
+  api("GET", "/demo/contracts/proto", { raw: true }).then((response) => ($("#b-proto").textContent = response.text));
+  renderBytes();
+
+  // 3) Demo D: dvaja WebSocket klienti, alebo jeden v „druhom okne“ (?solo=C)
+  const solo = params.get("solo");
+  if (solo) {
+    makeClient(solo);
+    $("#d-open-second").style.display = "none";
+  } else {
+    makeClient("A");
+    makeClient("B");
   }
+
+  // 4) voliteľne prehraj scenár
+  if (params.get("autorun")) await autorun(params.get("tab") || "A");
 })();

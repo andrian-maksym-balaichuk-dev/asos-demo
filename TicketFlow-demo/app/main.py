@@ -27,6 +27,12 @@ from app.webhook.receiver import router as webhook_router
 from app.websocket.manager import router as ws_router
 from soap_service.server import router as soap_router
 
+FRONTEND = Path(__file__).resolve().parent.parent / "frontend"
+
+
+# ════════════════════════════════════════════════════════════════════════
+# 1. Logovanie — každý riadok nesie correlation ID aktuálneho requestu
+# ════════════════════════════════════════════════════════════════════════
 
 class _CidFilter(logging.Filter):
     def filter(self, record):
@@ -40,11 +46,14 @@ _handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [%(cid)s] %(n
 logging.basicConfig(level=logging.INFO, handlers=[_handler])
 log = logging.getLogger("ticketflow")
 
-FRONTEND = Path(__file__).resolve().parent.parent / "frontend"
 
+# ════════════════════════════════════════════════════════════════════════
+# 2. Štart aplikácie
+# ════════════════════════════════════════════════════════════════════════
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    # bez secretu by sa nedali overiť webhooky → radšej vôbec neštartuj
     if not config.WEBHOOK_SECRET:
         raise RuntimeError("WEBHOOK_SECRET nie je nastavený (pozri .env.example)")
     await ensure_seeded()
@@ -66,28 +75,40 @@ app = FastAPI(
 )
 
 
+# ════════════════════════════════════════════════════════════════════════
+# 3. Spoločné správanie všetkých requestov
+# ════════════════════════════════════════════════════════════════════════
+
 @app.middleware("http")
 async def correlation_middleware(request: Request, call_next):
+    # Prevezmi X-Correlation-ID od klienta (ak je platné), inak vygeneruj nové
     cid = new_correlation_id(request.headers.get("X-Correlation-ID"))
     token = correlation_id.set(cid)
-    t0 = time.perf_counter()
+    started = time.perf_counter()
     try:
         response = await call_next(request)
     finally:
         correlation_id.reset(token)
+
     response.headers["X-Correlation-ID"] = cid
     if not request.url.path.startswith(("/static", "/health")):
+        elapsed_ms = (time.perf_counter() - started) * 1000
         log.info("%s %s → %s (%.1f ms) [%s]", request.method, request.url.path, response.status_code,
-                 (time.perf_counter() - t0) * 1000, cid)
+                 elapsed_ms, cid)
     return response
 
 
 @app.exception_handler(RequestValidationError)
 async def validation_handler(_: Request, exc: RequestValidationError):
-    errors = [{"loc": list(e.get("loc", [])), "msg": e.get("msg")} for e in exc.errors()]
+    # Chyby validácie tiež ako problem+json — jeden formát chýb pre celé API
+    errors = [{"loc": list(error.get("loc", [])), "msg": error.get("msg")} for error in exc.errors()]
     return problem(422, "VALIDATION_ERROR", "Neplatná požiadavka",
                    "Požiadavka nespĺňa schému (pozri errors).", errors=errors)
 
+
+# ════════════════════════════════════════════════════════════════════════
+# 4. Health checky
+# ════════════════════════════════════════════════════════════════════════
 
 @app.get("/health", tags=["Prevádzka"])
 async def health():
@@ -98,38 +119,54 @@ async def health():
 @app.get("/health/deps", tags=["Prevádzka"], summary="Stav všetkých závislostí")
 async def health_deps():
     from grpc_service.client import health_check
-    out = {}
-    try:
+
+    async def check_db():
         await ping()
-        out["db"] = "ok"
-    except Exception as e:  # noqa: BLE001
-        out["db"] = f"FAIL: {e.__class__.__name__}"
+        return "ok"
+
+    async def check_provider():
+        async with httpx.AsyncClient(timeout=2.0) as http:
+            return (await http.get(f"{config.PROVIDER_URL}/health")).json()["status"]
+
+    deps = {
+        "db": await _probe(check_db()),
+        "grpc": await _probe(health_check(config.GRPC_TARGET)),
+        "provider": await _probe(check_provider()),
+    }
+    ok = deps["db"] == "ok" and deps["grpc"] == "SERVING" and deps["provider"] == "ok"
+    return JSONResponse({"ok": ok, **deps}, status_code=200 if ok else 503)
+
+
+async def _probe(check) -> str:
+    """Vráti výsledok kontroly; pri chybe len názov výnimky (žiadne detaily von)."""
     try:
-        out["grpc"] = await health_check(config.GRPC_TARGET)
-    except Exception as e:  # noqa: BLE001
-        out["grpc"] = f"FAIL: {e.__class__.__name__}"
-    try:
-        async with httpx.AsyncClient(timeout=2.0) as c:
-            out["provider"] = (await c.get(f"{config.PROVIDER_URL}/health")).json()["status"]
-    except Exception as e:  # noqa: BLE001
-        out["provider"] = f"FAIL: {e.__class__.__name__}"
-    ok = out["db"] == "ok" and out["grpc"] == "SERVING" and out["provider"] == "ok"
-    return JSONResponse({"ok": ok, **out}, status_code=200 if ok else 503)
+        return await check
+    except Exception as exc:  # noqa: BLE001
+        return f"FAIL: {exc.__class__.__name__}"
 
 
-app.include_router(rest_router)
-app.include_router(soap_router)
-app.include_router(graphql_router)
-app.include_router(webhook_router)
-app.include_router(ws_router)
-app.include_router(demo_router)
+# ════════════════════════════════════════════════════════════════════════
+# 5. Routery jednotlivých typov API
+# ════════════════════════════════════════════════════════════════════════
 
+app.include_router(rest_router)       # Demo A — REST
+app.include_router(soap_router)       # Demo B — SOAP
+app.include_router(graphql_router)    # Demo C — GraphQL
+app.include_router(webhook_router)    # Demo D — Webhook
+app.include_router(ws_router)         # WebSocket notifikácie
+app.include_router(demo_router)       # ovládanie dema
+
+
+# ════════════════════════════════════════════════════════════════════════
+# 6. Dashboard a Swagger UI
+# ════════════════════════════════════════════════════════════════════════
 
 @app.get("/docs", include_in_schema=False)
 async def swagger_ui():
+    # Lokálne súbory, ak sú stiahnuté (prezentácia bez internetu), inak CDN
     vendor = FRONTEND / "vendor"
-    local = (vendor / "swagger-ui-bundle.js").exists() and (vendor / "swagger-ui.css").exists()
-    base = "/static/vendor" if local else "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14"
+    has_local = (vendor / "swagger-ui-bundle.js").exists() and (vendor / "swagger-ui.css").exists()
+    base = "/static/vendor" if has_local else "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14"
     return get_swagger_ui_html(openapi_url="/openapi.json", title="TicketFlow — Swagger UI",
                                swagger_js_url=f"{base}/swagger-ui-bundle.js",
                                swagger_css_url=f"{base}/swagger-ui.css",

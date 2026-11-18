@@ -19,12 +19,17 @@ from app.common import now_iso
 
 log = logging.getLogger("ticketflow.ws")
 router = APIRouter()
-_CLIENT_RE = re.compile(r"^[A-Za-z0-9 _.-]{1,40}$")
+CLIENT_NAME_RE = re.compile(r"^[A-Za-z0-9 _.-]{1,40}$")
+DEFAULT_CLIENT_NAME = "klient"
 
+
+# ════════════════════════════════════════════════════════════════════════
+# 1. Správca spojení — kto je pripojený a broadcast
+# ════════════════════════════════════════════════════════════════════════
 
 class ConnectionManager:
     def __init__(self) -> None:
-        self._clients: dict[int, tuple[str, WebSocket]] = {}
+        self._clients: dict[int, tuple[str, WebSocket]] = {}   # id(ws) → (meno, spojenie)
         self._lock = asyncio.Lock()
 
     async def connect(self, ws: WebSocket, client_name: str) -> None:
@@ -45,8 +50,10 @@ class ConnectionManager:
     async def broadcast(self, message: dict) -> int:
         """Pošle správu všetkým pripojeným klientom. Vracia počet úspešných odoslaní."""
         message = {"sent_at": now_iso(), **message}
+        # kópia zoznamu: posielanie je pomalé, zámok nedržíme počas await send
         async with self._lock:
             targets = list(self._clients.items())
+
         delivered = 0
         for key, (name, ws) in targets:
             try:
@@ -62,11 +69,16 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
+# ════════════════════════════════════════════════════════════════════════
+# 2. Endpoint /ws
+# ════════════════════════════════════════════════════════════════════════
+
 @router.websocket("/ws")
-async def websocket_endpoint(ws: WebSocket, client: str = "klient"):
-    name = client if _CLIENT_RE.match(client) else "klient"
+async def websocket_endpoint(ws: WebSocket, client: str = DEFAULT_CLIENT_NAME):
+    name = client if CLIENT_NAME_RE.match(client) else DEFAULT_CLIENT_NAME
     await manager.connect(ws, name)
     try:
+        # 1. uvítanie — pripomenie klientovi, že stav si má načítať sám
         await ws.send_json({
             "type": "hello",
             "client": name,
@@ -74,9 +86,10 @@ async def websocket_endpoint(ws: WebSocket, client: str = "klient"):
             "sent_at": now_iso(),
             "note": "Server nerobí replay. Aktuálny stav načítaj cez GET /reservations/{id}.",
         })
+        # 2. drž spojenie otvorené; klient môže posielať "ping"
         while True:
-            msg = await ws.receive_text()  # klient môže posielať ping
-            if msg == "ping":
+            incoming = await ws.receive_text()
+            if incoming == "ping":
                 await ws.send_json({"type": "pong", "sent_at": now_iso()})
     except WebSocketDisconnect:
         pass

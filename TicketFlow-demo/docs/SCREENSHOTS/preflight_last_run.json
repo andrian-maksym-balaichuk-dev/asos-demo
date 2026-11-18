@@ -1,5 +1,5 @@
 {
-  "recorded_at": "2026-11-18T20:09:13+01:00",
+  "recorded_at": "2026-11-18T20:47:11+01:00",
   "base_url": "http://localhost:8000",
   "results": [
     {
@@ -87,8 +87,8 @@
             "seat_id": "A7",
             "buyer_id": "buyer-anna",
             "status": "PENDING",
-            "created_at": "2026-11-18T19:09:13.668963+00:00",
-            "updated_at": "2026-11-18T19:09:13.668963+00:00"
+            "created_at": "2026-11-18T19:47:11.062200+00:00",
+            "updated_at": "2026-11-18T19:47:11.062200+00:00"
           },
           "second": {
             "id": "r-001",
@@ -96,8 +96,8 @@
             "seat_id": "A7",
             "buyer_id": "buyer-anna",
             "status": "PENDING",
-            "created_at": "2026-11-18T19:09:13.668963+00:00",
-            "updated_at": "2026-11-18T19:09:13.668963+00:00"
+            "created_at": "2026-11-18T19:47:11.062200+00:00",
+            "updated_at": "2026-11-18T19:47:11.062200+00:00"
           },
           "replayed": "true"
         },
@@ -107,8 +107,8 @@
           "status": 422,
           "code": "IDEMPOTENCY_KEY_REUSED",
           "detail": "Rovnaký Idempotency-Key s iným telom požiadavky je chyba klienta. Nič sa nezmenilo.",
-          "correlation_id": "cid-5f8df7820f7a",
-          "timestamp": "2026-11-18T19:09:13.676+00:00"
+          "correlation_id": "cid-76c87f1ffcb9",
+          "timestamp": "2026-11-18T19:47:11.072+00:00"
         },
         "race": {
           "buyer-boris": {
@@ -119,8 +119,8 @@
               "seat_id": "A7",
               "buyer_id": "buyer-boris",
               "status": "PENDING",
-              "created_at": "2026-11-18T19:09:13.698489+00:00",
-              "updated_at": "2026-11-18T19:09:13.698489+00:00"
+              "created_at": "2026-11-18T19:47:11.097151+00:00",
+              "updated_at": "2026-11-18T19:47:11.097151+00:00"
             }
           },
           "buyer-anna": {
@@ -131,8 +131,8 @@
               "status": 409,
               "code": "SEAT_TAKEN",
               "detail": "Sedadlo A7 už má aktívnu rezerváciu. Rozhodol PostgreSQL UNIQUE index one_active_reservation_per_seat.",
-              "correlation_id": "cid-4a68217ed653",
-              "timestamp": "2026-11-18T19:09:13.699+00:00",
+              "correlation_id": "cid-fbd982ab81b1",
+              "timestamp": "2026-11-18T19:47:11.098+00:00",
               "constraint": "one_active_reservation_per_seat"
             }
           }
@@ -150,12 +150,12 @@
               "id": "r-001",
               "buyer_id": "buyer-boris",
               "status": "PENDING",
-              "created_at": "2026-11-18T19:09:13.698489+00:00"
+              "created_at": "2026-11-18T19:47:11.097151+00:00"
             }
           ],
           "active_count": 1,
           "sql": "SELECT id, buyer_id, status, created_at FROM reservations WHERE event_id = '42' AND seat_id = 'A7' AND status IN ('PENDING', 'CONFIRMED')",
-          "at": "2026-11-18T19:09:13.701+00:00"
+          "at": "2026-11-18T19:47:11.102+00:00"
         }
       }
     },
@@ -190,7 +190,7 @@
         },
         {
           "ok": true,
-          "what": "klient skončil pri deadline (203.7 ms)",
+          "what": "klient skončil pri deadline (203.8 ms)",
           "why_fail": ""
         }
       ],
@@ -203,9 +203,9 @@
           "response_xml": "<?xml version='1.0' encoding='UTF-8'?>\n<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:tns=\"urn:ticketflow:inventory:v1\">\n  <soap:Body>\n    <tns:CheckSeatResponse>\n      <tns:eventId>42</tns:eventId>\n      <tns:seatId>A7</tns:seatId>\n      <tns:available>true</tns:available>\n      <tns:status>FREE</tns:status>\n    </tns:CheckSeatResponse>\n  </soap:Body>\n</soap:Envelope>\n",
           "request_body_bytes": 322,
           "response_body_bytes": 401,
-          "client_elapsed_ms": 5.0,
-          "at": "2026-11-18T19:09:13.725+00:00",
-          "correlation_id": "cid-d82c3910dac6",
+          "client_elapsed_ms": 6.1,
+          "at": "2026-11-18T19:47:11.132+00:00",
+          "correlation_id": "cid-2b0104bb444b",
           "bytes_note": "Merané: veľkosť HTTP body (XML Envelope), bez HTTP hlavičiek."
         },
         "soap_fault": {
@@ -216,9 +216,9 @@
           "response_xml": "<?xml version='1.0' encoding='UTF-8'?>\n<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:tns=\"urn:ticketflow:inventory:v1\">\n  <soap:Body>\n    <soap:Fault>\n      <faultcode>soap:Client</faultcode>\n      <faultstring>Chýba povinný element seatId.</faultstring>\n      <detail>\n        <tns:errorCode>MISSING_ELEMENT</tns:errorCode>\n      </detail>\n    </soap:Fault>\n  </soap:Body>\n</soap:Envelope>\n",
           "request_body_bytes": 288,
           "response_body_bytes": 423,
-          "client_elapsed_ms": 4.2,
-          "at": "2026-11-18T19:09:13.730+00:00",
-          "correlation_id": "cid-0cc006273f8e",
+          "client_elapsed_ms": 5.4,
+          "at": "2026-11-18T19:47:11.139+00:00",
+          "correlation_id": "cid-6198b72c7ada",
           "bytes_note": "Merané: veľkosť HTTP body (XML Envelope), bez HTTP hlavičiek."
         },
         "grpc_ok": {
@@ -238,12 +238,12 @@
             "seat_id": "A7",
             "available": true,
             "status": "FREE",
-            "server_elapsed_ms": 0
+            "server_elapsed_ms": 1
           },
-          "response_protobuf_bytes": 16,
-          "client_elapsed_ms": 1.5,
-          "at": "2026-11-18T19:09:13.733+00:00",
-          "correlation_id": "cid-a92953abdbda",
+          "response_protobuf_bytes": 18,
+          "client_elapsed_ms": 2.0,
+          "at": "2026-11-18T19:47:11.143+00:00",
+          "correlation_id": "cid-ac0e30eca3bb",
           "bytes_note": "Merané: veľkosť serializovanej protobuf správy (bez HTTP/2 rámcov, bez 5 B gRPC prefixu a hlavičiek)."
         },
         "grpc_deadline": {
@@ -259,9 +259,9 @@
           "ok": false,
           "code": "DEADLINE_EXCEEDED",
           "details": "Deadline Exceeded",
-          "client_elapsed_ms": 203.7,
-          "at": "2026-11-18T19:09:13.937+00:00",
-          "correlation_id": "cid-bf23a4d5b14a",
+          "client_elapsed_ms": 203.8,
+          "at": "2026-11-18T19:47:11.349+00:00",
+          "correlation_id": "cid-5d94bee047d5",
           "bytes_note": "Merané: veľkosť serializovanej protobuf správy (bez HTTP/2 rámcov, bez 5 B gRPC prefixu a hlavičiek)."
         }
       }
@@ -326,8 +326,8 @@
           "SELECT seat_id, row_label, seat_number FROM seats WHERE event_id = %(event_id)s ORDER BY row_label, seat_number LIMIT %(limit)s",
           "SELECT seat_id, amount_cents, currency, internal_cost_cents FROM prices WHERE event_id = %(event_id)s AND seat_id IN (%(seat_ids_1)s, %(seat_ids_2)s, %(seat_ids_3)s, %(seat_ids_4)s, %(seat_ids_5)s, %(seat_ids_6)s, %(seat"
         ],
-        "naive_ms": 16.3,
-        "batch_ms": 4.1,
+        "naive_ms": 18.3,
+        "batch_ms": 4.4,
         "sample": [
           {
             "id": "A1",
@@ -398,8 +398,8 @@
             "status": 400,
             "code": "MISSING_SIGNATURE",
             "detail": "Chýba hlavička TicketFlow-Signature.",
-            "correlation_id": "cid-39862fa83428",
-            "timestamp": "2026-11-18T19:09:14.025+00:00",
+            "correlation_id": "cid-7a80bf0ae88a",
+            "timestamp": "2026-11-18T19:47:11.439+00:00",
             "db_changed": false
           }
         },
@@ -411,8 +411,8 @@
             "status": 401,
             "code": "INVALID_SIGNATURE",
             "detail": "HMAC podpis nesedí s raw body. Databáza sa nezmenila.",
-            "correlation_id": "cid-e9b33c7bea10",
-            "timestamp": "2026-11-18T19:09:14.039+00:00",
+            "correlation_id": "cid-2ae951266877",
+            "timestamp": "2026-11-18T19:47:11.455+00:00",
             "db_changed": false
           }
         },
@@ -422,41 +422,41 @@
             "url": "http://api:8000/webhooks/payment",
             "headers": {
               "Content-Type": "application/json",
-              "TicketFlow-Signature": "t=1795028954,v1=5641d250c3b917eeb62f3f79ae7ee1b6ea6649289c9c92a9d94fa687b172031f",
-              "X-Correlation-ID": "cid-8502abfa6f30"
+              "TicketFlow-Signature": "t=1795031231,v1=22e405315d01e7dd97416262b26ac86ed4ff61cfeb0bca232fc4448eeca59183",
+              "X-Correlation-ID": "cid-cf1f4a0d7759"
             },
-            "raw_body": "{\"id\":\"evt_182f4d464390ccf3\",\"type\":\"payment.succeeded\",\"created\":1795028954,\"data\":{\"reservation_id\":\"r-001\",\"payment_id\":\"pay_cb425220280b\",\"amount_cents\":5900,\"currency\":\"EUR\"}}"
+            "raw_body": "{\"id\":\"evt_7362bfc28b8a7de2\",\"type\":\"payment.succeeded\",\"created\":1795031231,\"data\":{\"reservation_id\":\"r-001\",\"payment_id\":\"pay_dbe154eb8c0b\",\"amount_cents\":5900,\"currency\":\"EUR\"}}"
           },
           "received": {
             "status": 200,
             "body": {
               "result": "PROCESSED",
               "outcome": "CONFIRMED",
-              "event_id": "evt_182f4d464390ccf3",
+              "event_id": "evt_7362bfc28b8a7de2",
               "reservation_id": "r-001",
               "status_before": "PENDING",
               "status_after": "CONFIRMED",
               "signature": "VALID",
               "websocket_deliveries": 2,
-              "correlation_id": "cid-8502abfa6f30"
+              "correlation_id": "cid-cf1f4a0d7759"
             }
           },
-          "elapsed_ms": 6.2,
-          "at": "2026-11-18T19:09:14.054+00:00",
-          "correlation_id": "cid-8502abfa6f30"
+          "elapsed_ms": 8.5,
+          "at": "2026-11-18T19:47:11.473+00:00",
+          "correlation_id": "cid-cf1f4a0d7759"
         },
         "replay": {
           "status": 200,
           "body": {
             "result": "DUPLICATE_IGNORED",
-            "event_id": "evt_182f4d464390ccf3",
+            "event_id": "evt_7362bfc28b8a7de2",
             "reservation_id": "r-001",
             "status_before": "CONFIRMED",
             "status_after": "CONFIRMED",
-            "first_processed_at": "2026-11-18T19:09:14.052231+00:00",
+            "first_processed_at": "2026-11-18T19:47:11.469639+00:00",
             "first_outcome": "CONFIRMED",
             "detail": "Udalosť už bola spracovaná. Prijatá bezpečne (200), stav sa nezmenil.",
-            "correlation_id": "cid-c01f1218870e"
+            "correlation_id": "cid-9eb37fb575e0"
           }
         },
         "snapshot": {
@@ -465,9 +465,9 @@
           "seat_id": "A7",
           "buyer_id": "buyer-preflight",
           "status": "CONFIRMED",
-          "created_at": "2026-11-18T19:09:14.011601+00:00",
-          "updated_at": "2026-11-18T19:09:14.052231+00:00",
-          "snapshot_at": "2026-11-18T19:09:14.068+00:00"
+          "created_at": "2026-11-18T19:47:11.425843+00:00",
+          "updated_at": "2026-11-18T19:47:11.469639+00:00",
+          "snapshot_at": "2026-11-18T19:47:11.489+00:00"
         }
       }
     }

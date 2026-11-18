@@ -9,7 +9,10 @@ Kľúčové garancie:
 * prices je samostatná tabuľka — umožňuje ukázať N+1 v GraphQL (Demo C).
 """
 
+# Poradie príkazov je dôležité: tabuľky skôr, než na ne ukazujú cudzie kľúče.
+# IF NOT EXISTS → bezpečné spúšťať pri každom štarte.
 SCHEMA_SQL = [
+    # ═══ 1. Katalóg: udalosti, sedadlá, ceny ═══
     """
     CREATE TABLE IF NOT EXISTS events (
         id         TEXT PRIMARY KEY,
@@ -38,6 +41,8 @@ SCHEMA_SQL = [
         FOREIGN KEY (event_id, seat_id) REFERENCES seats(event_id, seat_id) ON DELETE CASCADE
     )
     """,
+    # ═══ 2. Rezervácie + invariant „jedno aktívne sedadlo" (Demo A) ═══
+    # Sekvencia dáva čitateľné ID r-001, r-002, …
     "CREATE SEQUENCE IF NOT EXISTS reservation_seq",
     """
     CREATE TABLE IF NOT EXISTS reservations (
@@ -51,11 +56,13 @@ SCHEMA_SQL = [
         FOREIGN KEY (event_id, seat_id) REFERENCES seats(event_id, seat_id) ON DELETE CASCADE
     )
     """,
+    # Čiastočný index: CANCELLED rezervácie sa nepočítajú, sedadlo sa dá znova predať
     """
     CREATE UNIQUE INDEX IF NOT EXISTS one_active_reservation_per_seat
         ON reservations (event_id, seat_id)
         WHERE status IN ('PENDING', 'CONFIRMED')
     """,
+    # ═══ 3. Idempotencia REST (Demo A) a deduplikácia webhookov (Demo D) ═══
     """
     CREATE TABLE IF NOT EXISTS idempotency_keys (
         key             TEXT PRIMARY KEY CHECK (length(key) BETWEEN 1 AND 255),
