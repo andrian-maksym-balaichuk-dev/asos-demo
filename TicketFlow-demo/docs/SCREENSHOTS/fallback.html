@@ -5,7 +5,7 @@
 section{border:1px solid #dde3ee;border-radius:12px;padding:16px 20px;margin:18px 0} li.ok{color:#15803d} li.bad{color:#b91c1c}
 pre{background:#f4f6fb;padding:12px;border-radius:8px;overflow:auto;max-height:420px;font-size:13px}
 img{max-width:100%;border:1px solid #dde3ee;border-radius:8px} figure{margin:20px 0}</style></head><body>
-<div class="banner">NÁHRADNÁ UKÁŽKA — záznam z preflight behu 2026-11-18T22:31:11+01:00 proti http://localhost:8000.
+<div class="banner">NÁHRADNÁ UKÁŽKA — záznam z preflight behu 2026-11-19T02:02:07+01:00 proti http://localhost:8000.
 Nie sú to živé dáta. Použi len ak živé demo zlyhá a povedz to publiku.</div>
 <h1>TicketFlow API Showcase — záznam</h1><section><h2>Služby a healthchecky — PASS</h2><ul><li class='ok'>✓ API http://localhost:8000 odpovedá</li><li class='ok'>✓ PostgreSQL dostupná</li><li class='ok'>✓ gRPC Inventory SERVING</li><li class='ok'>✓ Payment provider simulátor</li><li class='ok'>✓ Swagger UI /docs</li><li class='ok'>✓ Swagger UI assets lokálne (funguje offline)</li></ul><details><summary>Zaznamenané dáta</summary><pre>{
   &quot;ok&quot;: true,
@@ -20,8 +20,8 @@ Nie sú to živé dáta. Použi len ak živé demo zlyhá a povedz to publiku.</
       &quot;seat_id&quot;: &quot;A7&quot;,
       &quot;buyer_id&quot;: &quot;buyer-anna&quot;,
       &quot;status&quot;: &quot;PENDING&quot;,
-      &quot;created_at&quot;: &quot;2026-11-18T21:31:11.170170+00:00&quot;,
-      &quot;updated_at&quot;: &quot;2026-11-18T21:31:11.170170+00:00&quot;
+      &quot;created_at&quot;: &quot;2026-11-19T01:02:07.329062+00:00&quot;,
+      &quot;updated_at&quot;: &quot;2026-11-19T01:02:07.329062+00:00&quot;
     },
     &quot;second&quot;: {
       &quot;id&quot;: &quot;r-001&quot;,
@@ -29,8 +29,8 @@ Nie sú to živé dáta. Použi len ak živé demo zlyhá a povedz to publiku.</
       &quot;seat_id&quot;: &quot;A7&quot;,
       &quot;buyer_id&quot;: &quot;buyer-anna&quot;,
       &quot;status&quot;: &quot;PENDING&quot;,
-      &quot;created_at&quot;: &quot;2026-11-18T21:31:11.170170+00:00&quot;,
-      &quot;updated_at&quot;: &quot;2026-11-18T21:31:11.170170+00:00&quot;
+      &quot;created_at&quot;: &quot;2026-11-19T01:02:07.329062+00:00&quot;,
+      &quot;updated_at&quot;: &quot;2026-11-19T01:02:07.329062+00:00&quot;
     },
     &quot;replayed&quot;: &quot;true&quot;
   },
@@ -40,8 +40,8 @@ Nie sú to živé dáta. Použi len ak živé demo zlyhá a povedz to publiku.</
     &quot;status&quot;: 422,
     &quot;code&quot;: &quot;IDEMPOTENCY_KEY_REUSED&quot;,
     &quot;detail&quot;: &quot;Rovnaký Idempotency-Key s iným telom požiadavky je chyba klienta. Nič sa nezmenilo.&quot;,
-    &quot;correlation_id&quot;: &quot;cid-c4c7885f9856&quot;,
-    &quot;timestamp&quot;: &quot;2026-11-18T21:31:11.176+00:00&quot;
+    &quot;correlation_id&quot;: &quot;cid-8f5fee6dd840&quot;,
+    &quot;timestamp&quot;: &quot;2026-11-19T01:02:07.338+00:00&quot;
   },
   &quot;race&quot;: {
     &quot;buyer-anna&quot;: {
@@ -52,8 +52,8 @@ Nie sú to živé dáta. Použi len ak živé demo zlyhá a povedz to publiku.</
         &quot;seat_id&quot;: &quot;A7&quot;,
         &quot;buyer_id&quot;: &quot;buyer-anna&quot;,
         &quot;status&quot;: &quot;PENDING&quot;,
-        &quot;created_at&quot;: &quot;2026-11-18T21:31:11.198099+00:00&quot;,
-        &quot;updated_at&quot;: &quot;2026-11-18T21:31:11.198099+00:00&quot;
+        &quot;created_at&quot;: &quot;2026-11-19T01:02:07.358316+00:00&quot;,
+        &quot;updated_at&quot;: &quot;2026-11-19T01:02:07.358316+00:00&quot;
       }
     },
     &quot;buyer-boris&quot;: {
@@ -64,8 +64,8 @@ Nie sú to živé dáta. Použi len ak živé demo zlyhá a povedz to publiku.</
         &quot;status&quot;: 409,
         &quot;code&quot;: &quot;SEAT_TAKEN&quot;,
         &quot;detail&quot;: &quot;Sedadlo A7 už má aktívnu rezerváciu. Rozhodol PostgreSQL UNIQUE index one_active_reservation_per_seat.&quot;,
-        &quot;correlation_id&quot;: &quot;cid-1418553164ed&quot;,
-        &quot;timestamp&quot;: &quot;2026-11-18T21:31:11.199+00:00&quot;,
+        &quot;correlation_id&quot;: &quot;cid-6bee72bd5c5b&quot;,
+        &quot;timestamp&quot;: &quot;2026-11-19T01:02:07.360+00:00&quot;,
         &quot;constraint&quot;: &quot;one_active_reservation_per_seat&quot;
       }
     }
@@ -83,14 +83,14 @@ Nie sú to živé dáta. Použi len ak živé demo zlyhá a povedz to publiku.</
         &quot;id&quot;: &quot;r-001&quot;,
         &quot;buyer_id&quot;: &quot;buyer-anna&quot;,
         &quot;status&quot;: &quot;PENDING&quot;,
-        &quot;created_at&quot;: &quot;2026-11-18T21:31:11.198099+00:00&quot;
+        &quot;created_at&quot;: &quot;2026-11-19T01:02:07.358316+00:00&quot;
       }
     ],
     &quot;active_count&quot;: 1,
     &quot;sql&quot;: &quot;SELECT id, buyer_id, status, created_at FROM reservations WHERE event_id = &#x27;42&#x27; AND seat_id = &#x27;A7&#x27; AND status IN (&#x27;PENDING&#x27;, &#x27;CONFIRMED&#x27;)&quot;,
-    &quot;at&quot;: &quot;2026-11-18T21:31:11.201+00:00&quot;
+    &quot;at&quot;: &quot;2026-11-19T01:02:07.362+00:00&quot;
   }
-}</pre></details></section><section><h2>Demo B — SOAP/WSDL a gRPC deadline — PASS</h2><ul><li class='ok'>✓ WSDL obsahuje operáciu CheckSeat</li><li class='ok'>✓ SOAP CheckSeat(42, A7) → available=true</li><li class='ok'>✓ neplatný SOAP request → SOAP Fault</li><li class='ok'>✓ gRPC CheckSeat → OK, available=true</li><li class='ok'>✓ gRPC 800 ms delay + 200 ms deadline → DEADLINE_EXCEEDED</li><li class='ok'>✓ klient skončil pri deadline (204.7 ms)</li></ul><details><summary>Zaznamenané dáta</summary><pre>{
+}</pre></details></section><section><h2>Demo B — SOAP/WSDL a gRPC deadline — PASS</h2><ul><li class='ok'>✓ WSDL obsahuje operáciu CheckSeat</li><li class='ok'>✓ SOAP CheckSeat(42, A7) → available=true</li><li class='ok'>✓ neplatný SOAP request → SOAP Fault</li><li class='ok'>✓ gRPC CheckSeat → OK, available=true</li><li class='ok'>✓ gRPC 800 ms delay + 200 ms deadline → DEADLINE_EXCEEDED</li><li class='ok'>✓ klient skončil pri deadline (203.6 ms)</li></ul><details><summary>Zaznamenané dáta</summary><pre>{
   &quot;soap&quot;: {
     &quot;endpoint&quot;: &quot;http://127.0.0.1:8000/soap&quot;,
     &quot;http_status&quot;: 200,
@@ -99,9 +99,9 @@ Nie sú to živé dáta. Použi len ak živé demo zlyhá a povedz to publiku.</
     &quot;response_xml&quot;: &quot;&lt;?xml version=&#x27;1.0&#x27; encoding=&#x27;UTF-8&#x27;?&gt;\n&lt;soap:Envelope xmlns:soap=\&quot;http://schemas.xmlsoap.org/soap/envelope/\&quot; xmlns:tns=\&quot;urn:ticketflow:inventory:v1\&quot;&gt;\n  &lt;soap:Body&gt;\n    &lt;tns:CheckSeatResponse&gt;\n      &lt;tns:eventId&gt;42&lt;/tns:eventId&gt;\n      &lt;tns:seatId&gt;A7&lt;/tns:seatId&gt;\n      &lt;tns:available&gt;true&lt;/tns:available&gt;\n      &lt;tns:status&gt;FREE&lt;/tns:status&gt;\n    &lt;/tns:CheckSeatResponse&gt;\n  &lt;/soap:Body&gt;\n&lt;/soap:Envelope&gt;\n&quot;,
     &quot;request_body_bytes&quot;: 322,
     &quot;response_body_bytes&quot;: 401,
-    &quot;client_elapsed_ms&quot;: 5.3,
-    &quot;at&quot;: &quot;2026-11-18T21:31:11.224+00:00&quot;,
-    &quot;correlation_id&quot;: &quot;cid-5fe527ccbceb&quot;,
+    &quot;client_elapsed_ms&quot;: 5.1,
+    &quot;at&quot;: &quot;2026-11-19T01:02:07.389+00:00&quot;,
+    &quot;correlation_id&quot;: &quot;cid-d20399b80776&quot;,
     &quot;bytes_note&quot;: &quot;Merané: veľkosť HTTP body (XML Envelope), bez HTTP hlavičiek.&quot;
   },
   &quot;soap_fault&quot;: {
@@ -112,9 +112,9 @@ Nie sú to živé dáta. Použi len ak živé demo zlyhá a povedz to publiku.</
     &quot;response_xml&quot;: &quot;&lt;?xml version=&#x27;1.0&#x27; encoding=&#x27;UTF-8&#x27;?&gt;\n&lt;soap:Envelope xmlns:soap=\&quot;http://schemas.xmlsoap.org/soap/envelope/\&quot; xmlns:tns=\&quot;urn:ticketflow:inventory:v1\&quot;&gt;\n  &lt;soap:Body&gt;\n    &lt;soap:Fault&gt;\n      &lt;faultcode&gt;soap:Client&lt;/faultcode&gt;\n      &lt;faultstring&gt;Chýba povinný element seatId.&lt;/faultstring&gt;\n      &lt;detail&gt;\n        &lt;tns:errorCode&gt;MISSING_ELEMENT&lt;/tns:errorCode&gt;\n      &lt;/detail&gt;\n    &lt;/soap:Fault&gt;\n  &lt;/soap:Body&gt;\n&lt;/soap:Envelope&gt;\n&quot;,
     &quot;request_body_bytes&quot;: 288,
     &quot;response_body_bytes&quot;: 423,
-    &quot;client_elapsed_ms&quot;: 4.2,
-    &quot;at&quot;: &quot;2026-11-18T21:31:11.229+00:00&quot;,
-    &quot;correlation_id&quot;: &quot;cid-ad0fa7bb9104&quot;,
+    &quot;client_elapsed_ms&quot;: 5.0,
+    &quot;at&quot;: &quot;2026-11-19T01:02:07.395+00:00&quot;,
+    &quot;correlation_id&quot;: &quot;cid-bdc11aba929f&quot;,
     &quot;bytes_note&quot;: &quot;Merané: veľkosť HTTP body (XML Envelope), bez HTTP hlavičiek.&quot;
   },
   &quot;grpc_ok&quot;: {
@@ -134,12 +134,12 @@ Nie sú to živé dáta. Použi len ak živé demo zlyhá a povedz to publiku.</
       &quot;seat_id&quot;: &quot;A7&quot;,
       &quot;available&quot;: true,
       &quot;status&quot;: &quot;FREE&quot;,
-      &quot;server_elapsed_ms&quot;: 0
+      &quot;server_elapsed_ms&quot;: 1
     },
-    &quot;response_protobuf_bytes&quot;: 16,
-    &quot;client_elapsed_ms&quot;: 1.4,
-    &quot;at&quot;: &quot;2026-11-18T21:31:11.232+00:00&quot;,
-    &quot;correlation_id&quot;: &quot;cid-9e02c4e0cd63&quot;,
+    &quot;response_protobuf_bytes&quot;: 18,
+    &quot;client_elapsed_ms&quot;: 1.6,
+    &quot;at&quot;: &quot;2026-11-19T01:02:07.398+00:00&quot;,
+    &quot;correlation_id&quot;: &quot;cid-66db126ed22c&quot;,
     &quot;bytes_note&quot;: &quot;Merané: veľkosť serializovanej protobuf správy (bez HTTP/2 rámcov, bez 5 B gRPC prefixu a hlavičiek).&quot;
   },
   &quot;grpc_deadline&quot;: {
@@ -155,9 +155,9 @@ Nie sú to živé dáta. Použi len ak živé demo zlyhá a povedz to publiku.</
     &quot;ok&quot;: false,
     &quot;code&quot;: &quot;DEADLINE_EXCEEDED&quot;,
     &quot;details&quot;: &quot;Deadline Exceeded&quot;,
-    &quot;client_elapsed_ms&quot;: 204.7,
-    &quot;at&quot;: &quot;2026-11-18T21:31:11.438+00:00&quot;,
-    &quot;correlation_id&quot;: &quot;cid-578508435451&quot;,
+    &quot;client_elapsed_ms&quot;: 203.6,
+    &quot;at&quot;: &quot;2026-11-19T01:02:07.603+00:00&quot;,
+    &quot;correlation_id&quot;: &quot;cid-245611b66907&quot;,
     &quot;bytes_note&quot;: &quot;Merané: veľkosť serializovanej protobuf správy (bez HTTP/2 rámcov, bez 5 B gRPC prefixu a hlavičiek).&quot;
   }
 }</pre></details></section><section><h2>Demo C — GraphQL 101 vs 2 SQL — PASS</h2><ul><li class='ok'>✓ obe query bez chýb</li><li class='ok'>✓ rovnaký JSON, 100 sedadiel</li><li class='ok'>✓ naivne: 101 skutočných SQL dotazov (očakávané 101)</li><li class='ok'>✓ batching: 2 skutočné SQL dotazy (očakávané 2)</li><li class='ok'>✓ limit 500 zamietnutý</li></ul><details><summary>Zaznamenané dáta</summary><pre>{
@@ -190,8 +190,8 @@ Nie sú to živé dáta. Použi len ak živé demo zlyhá a povedz to publiku.</
     &quot;SELECT seat_id, row_label, seat_number FROM seats WHERE event_id = %(event_id)s ORDER BY row_label, seat_number LIMIT %(limit)s&quot;,
     &quot;SELECT seat_id, amount_cents, currency, internal_cost_cents FROM prices WHERE event_id = %(event_id)s AND seat_id IN (%(seat_ids_1)s, %(seat_ids_2)s, %(seat_ids_3)s, %(seat_ids_4)s, %(seat_ids_5)s, %(seat_ids_6)s, %(seat&quot;
   ],
-  &quot;naive_ms&quot;: 21.5,
-  &quot;batch_ms&quot;: 4.8,
+  &quot;naive_ms&quot;: 21.0,
+  &quot;batch_ms&quot;: 5.3,
   &quot;sample&quot;: [
     {
       &quot;id&quot;: &quot;A1&quot;,
@@ -225,8 +225,8 @@ Nie sú to živé dáta. Použi len ak živé demo zlyhá a povedz to publiku.</
       &quot;status&quot;: 400,
       &quot;code&quot;: &quot;MISSING_SIGNATURE&quot;,
       &quot;detail&quot;: &quot;Chýba hlavička TicketFlow-Signature.&quot;,
-      &quot;correlation_id&quot;: &quot;cid-fd00561813f3&quot;,
-      &quot;timestamp&quot;: &quot;2026-11-18T21:31:11.549+00:00&quot;,
+      &quot;correlation_id&quot;: &quot;cid-201522e99044&quot;,
+      &quot;timestamp&quot;: &quot;2026-11-19T01:02:07.709+00:00&quot;,
       &quot;db_changed&quot;: false
     }
   },
@@ -238,8 +238,8 @@ Nie sú to živé dáta. Použi len ak živé demo zlyhá a povedz to publiku.</
       &quot;status&quot;: 401,
       &quot;code&quot;: &quot;INVALID_SIGNATURE&quot;,
       &quot;detail&quot;: &quot;HMAC podpis nesedí s raw body. Databáza sa nezmenila.&quot;,
-      &quot;correlation_id&quot;: &quot;cid-c23fc68b30c0&quot;,
-      &quot;timestamp&quot;: &quot;2026-11-18T21:31:11.563+00:00&quot;,
+      &quot;correlation_id&quot;: &quot;cid-3f6a49854d07&quot;,
+      &quot;timestamp&quot;: &quot;2026-11-19T01:02:07.722+00:00&quot;,
       &quot;db_changed&quot;: false
     }
   },
@@ -249,41 +249,41 @@ Nie sú to živé dáta. Použi len ak živé demo zlyhá a povedz to publiku.</
       &quot;url&quot;: &quot;http://api:8000/webhooks/payment&quot;,
       &quot;headers&quot;: {
         &quot;Content-Type&quot;: &quot;application/json&quot;,
-        &quot;TicketFlow-Signature&quot;: &quot;t=1795037471,v1=f0bdc5b4d4169f1228d05791193cf27a2ea69ef094c0804e31bb3e948f7f249a&quot;,
-        &quot;X-Correlation-ID&quot;: &quot;cid-ae96eb5db70e&quot;
+        &quot;TicketFlow-Signature&quot;: &quot;t=1795050127,v1=91f0dd75db8ea0813c3a819c8658eabd0c1233388b6b982814bc79970fb4a799&quot;,
+        &quot;X-Correlation-ID&quot;: &quot;cid-04cddbfc8e0f&quot;
       },
-      &quot;raw_body&quot;: &quot;{\&quot;id\&quot;:\&quot;evt_c3ec1f798484a36a\&quot;,\&quot;type\&quot;:\&quot;payment.succeeded\&quot;,\&quot;created\&quot;:1795037471,\&quot;data\&quot;:{\&quot;reservation_id\&quot;:\&quot;r-001\&quot;,\&quot;payment_id\&quot;:\&quot;pay_6bc29e53280c\&quot;,\&quot;amount_cents\&quot;:5900,\&quot;currency\&quot;:\&quot;EUR\&quot;}}&quot;
+      &quot;raw_body&quot;: &quot;{\&quot;id\&quot;:\&quot;evt_b9205f97709749ec\&quot;,\&quot;type\&quot;:\&quot;payment.succeeded\&quot;,\&quot;created\&quot;:1795050127,\&quot;data\&quot;:{\&quot;reservation_id\&quot;:\&quot;r-001\&quot;,\&quot;payment_id\&quot;:\&quot;pay_abccb595d16e\&quot;,\&quot;amount_cents\&quot;:5900,\&quot;currency\&quot;:\&quot;EUR\&quot;}}&quot;
     },
     &quot;received&quot;: {
       &quot;status&quot;: 200,
       &quot;body&quot;: {
         &quot;result&quot;: &quot;PROCESSED&quot;,
         &quot;outcome&quot;: &quot;CONFIRMED&quot;,
-        &quot;event_id&quot;: &quot;evt_c3ec1f798484a36a&quot;,
+        &quot;event_id&quot;: &quot;evt_b9205f97709749ec&quot;,
         &quot;reservation_id&quot;: &quot;r-001&quot;,
         &quot;status_before&quot;: &quot;PENDING&quot;,
         &quot;status_after&quot;: &quot;CONFIRMED&quot;,
         &quot;signature&quot;: &quot;VALID&quot;,
         &quot;websocket_deliveries&quot;: 2,
-        &quot;correlation_id&quot;: &quot;cid-ae96eb5db70e&quot;
+        &quot;correlation_id&quot;: &quot;cid-04cddbfc8e0f&quot;
       }
     },
-    &quot;elapsed_ms&quot;: 6.2,
-    &quot;at&quot;: &quot;2026-11-18T21:31:11.577+00:00&quot;,
-    &quot;correlation_id&quot;: &quot;cid-ae96eb5db70e&quot;
+    &quot;elapsed_ms&quot;: 6.1,
+    &quot;at&quot;: &quot;2026-11-19T01:02:07.737+00:00&quot;,
+    &quot;correlation_id&quot;: &quot;cid-04cddbfc8e0f&quot;
   },
   &quot;replay&quot;: {
     &quot;status&quot;: 200,
     &quot;body&quot;: {
       &quot;result&quot;: &quot;DUPLICATE_IGNORED&quot;,
-      &quot;event_id&quot;: &quot;evt_c3ec1f798484a36a&quot;,
+      &quot;event_id&quot;: &quot;evt_b9205f97709749ec&quot;,
       &quot;reservation_id&quot;: &quot;r-001&quot;,
       &quot;status_before&quot;: &quot;CONFIRMED&quot;,
       &quot;status_after&quot;: &quot;CONFIRMED&quot;,
-      &quot;first_processed_at&quot;: &quot;2026-11-18T21:31:11.575640+00:00&quot;,
+      &quot;first_processed_at&quot;: &quot;2026-11-19T01:02:07.734812+00:00&quot;,
       &quot;first_outcome&quot;: &quot;CONFIRMED&quot;,
       &quot;detail&quot;: &quot;Udalosť už bola spracovaná. Prijatá bezpečne (200), stav sa nezmenil.&quot;,
-      &quot;correlation_id&quot;: &quot;cid-8aff7e638401&quot;
+      &quot;correlation_id&quot;: &quot;cid-d2cc5ca25c50&quot;
     }
   },
   &quot;snapshot&quot;: {
@@ -292,9 +292,9 @@ Nie sú to živé dáta. Použi len ak živé demo zlyhá a povedz to publiku.</
     &quot;seat_id&quot;: &quot;A7&quot;,
     &quot;buyer_id&quot;: &quot;buyer-preflight&quot;,
     &quot;status&quot;: &quot;CONFIRMED&quot;,
-    &quot;created_at&quot;: &quot;2026-11-18T21:31:11.536383+00:00&quot;,
-    &quot;updated_at&quot;: &quot;2026-11-18T21:31:11.575640+00:00&quot;,
-    &quot;snapshot_at&quot;: &quot;2026-11-18T21:31:11.590+00:00&quot;
+    &quot;created_at&quot;: &quot;2026-11-19T01:02:07.696981+00:00&quot;,
+    &quot;updated_at&quot;: &quot;2026-11-19T01:02:07.734812+00:00&quot;,
+    &quot;snapshot_at&quot;: &quot;2026-11-19T01:02:07.749+00:00&quot;
   }
 }</pre></details></section><h2>Screenshoty</h2><figure><img src='demo_A_rest.png' alt='demo_A_rest.png'><figcaption>demo_A_rest.png</figcaption></figure><figure><img src='demo_B_grpc_deadline.png' alt='demo_B_grpc_deadline.png'><figcaption>demo_B_grpc_deadline.png</figcaption></figure><figure><img src='demo_B_soap.png' alt='demo_B_soap.png'><figcaption>demo_B_soap.png</figcaption></figure><figure><img src='demo_C_graphql.png' alt='demo_C_graphql.png'><figcaption>demo_C_graphql.png</figcaption></figure><figure><img src='demo_D_webhook_ws.png' alt='demo_D_webhook_ws.png'><figcaption>demo_D_webhook_ws.png</figcaption></figure>
 </body></html>

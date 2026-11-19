@@ -35,6 +35,8 @@ const STEPS = {
       text: "Server umelo čaká (len demo). Keď klientovi vyprší deadline, gRPC zruší aj prácu servera — vznikne CancelledError." },
   ],
   C: [
+    { who: "Schéma", code: ["C0"], title: "Najprv mapa: schéma, query a tok requestu",
+      text: "Python triedy sa stanú GraphQL typmi. Každé pole v query naplní resolver — tu vidno, ktorý resolver robí koľko SQL dotazov a kadiaľ ide request." },
     { who: "Prehliadač", code: ["C1"], title: "Klient pošle iba text query",
       text: "Jeden POST /graphql. Prehliadač nemá SQL ani prístup k databáze — len opíše, aké polia chce." },
     { who: "Server", code: ["C2"], title: "Endpoint: nové spojenie a nový DataLoader na request",
@@ -132,12 +134,14 @@ const KEYWORDS = {
   javascript: "async await function return if else const let new for of typeof null true false",
   proto: "syntax package service rpc returns message string uint32 bool",
   xml: "",
+  text: "",
 };
 const PATTERNS = {
   python: /(#[^\n]*)|("""[\s\S]*?"""|f?"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')|\b(\d+)\b|\b([A-Za-z_]\w*)\b/g,
   javascript: /(\/\/[^\n]*)|(`(?:\\.|[^`\\])*`|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')|\b(\d+)\b|\b([A-Za-z_]\w*)\b/g,
   proto: /(\/\/[^\n]*)|("(?:\\.|[^"\\\n])*")|\b(\d+)\b|\b([A-Za-z_]\w*)\b/g,
   xml: /(<!--[\s\S]*?-->)|("[^"\n]*")|((?!))|(<\/?[\w:]+|\/?>)/g,
+  text: /((?!))((?!))((?!))((?!))/g,   // diagram: bez zvýraznenia
 };
 
 function highlight(code, language) {

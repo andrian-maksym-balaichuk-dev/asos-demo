@@ -55,12 +55,19 @@ def extract_snippets() -> dict[str, dict]:
             if (start := START.search(line)) and not END.search(line):
                 open_id, first_line, buffer = start.group(1), number + 1, []
             elif (end := END.search(line)) and end.group(1) == open_id:
+                code = textwrap.dedent("\n".join(buffer)).strip("\n")
+                language = LANGUAGE[Path(relative).suffix]
+                # Ukážka zložená iba z komentárov (diagram) → zobraz ako čistý text bez „# “
+                if all(line.lstrip().startswith("#") for line in code.splitlines() if line.strip()):
+                    code = "\n".join(line.lstrip()[2:] if line.lstrip().startswith("# ") else line.lstrip()[1:]
+                                      for line in code.splitlines())
+                    language = "text"
                 snippets[open_id] = {
                     "file": relative,
                     "line_start": first_line,
                     "line_end": number - 1,
-                    "language": LANGUAGE[Path(relative).suffix],
-                    "code": textwrap.dedent("\n".join(buffer)).strip("\n"),
+                    "language": language,
+                    "code": code,
                 }
                 open_id = None
             elif open_id:

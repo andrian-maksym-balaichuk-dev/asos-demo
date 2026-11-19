@@ -26,6 +26,39 @@ DEMO_QUERY = '{ event(id: "42") { seats(limit: 100) { id price { amount currency
 
 
 # ════════════════════════════════════════════════════════════════════════
+# 0. Prehľad: schéma, vykonanie query a tok requestu (prečítaj ako prvé)
+# ════════════════════════════════════════════════════════════════════════
+# ── ukážka C0 ──
+# SCHÉMA = čo smie klient žiadať. Vzniká automaticky z Python tried nižšie:
+#
+#   type Query { event(id: ID!): Event! }                          ← class Query
+#   type Event { id  name  venue  seats(limit: Int): [Seat!]! }    ← class Event
+#   type Seat  { id  row  number  price: Price }                   ← class Seat
+#   type Price { amount  currency  internalCost }                  ← class Price
+#                                  (internalCost vidí iba rola admin)
+#
+# VYKONANIE QUERY z dema — každé pole naplní jeden resolver:
+#
+#   { event(id: "42") {                Query.event  → 0 SQL   (len referencia na udalosť)
+#       seats(limit: 100) {            Event.seats  → 1 SQL   (načíta 100 sedadiel)
+#         id                           hodnota už v objekte → 0 SQL
+#         price { amount currency }    Seat.price   → zavolá sa 100×:
+#   } } }                                 naivne    → 100 SQL (1 na sedadlo)   spolu 101
+#                                         batching  →   1 SQL (DataLoader)     spolu   2
+#
+# TOK JEDNÉHO REQUESTU:
+#
+#   prehliadač ── POST /graphql {"query": "…"} ──►  endpoint.py: run_query()
+#       ▲                                               │ 1. nové DB spojenie + nový DataLoader
+#       │                                               │ 2. schema.execute(): validácia, limity
+#       │                                               ▼
+#       └── JSON {data, errors, extensions.sql} ◄── resolvery ── SQL ──► PostgreSQL
+#
+# Klient nikdy nevidí SQL ani databázu — posiela iba text query.
+# ── /ukážka C0 ──
+
+
+# ════════════════════════════════════════════════════════════════════════
 # 1. SQL dotazy (parametrizované — hodnoty od klienta sa nikdy nevkladajú do textu SQL)
 # ════════════════════════════════════════════════════════════════════════
 
@@ -57,8 +90,16 @@ SQL_EVENT = text("SELECT id, name, venue FROM events WHERE id = :event_id")
 # ════════════════════════════════════════════════════════════════════════
 # 2. Typy schémy a ich resolvery
 #    Resolver = funkcia, ktorá naplní jedno pole. Klient vyberá polia, server rozhoduje, ako ich načíta.
+#
+#    Ako čítať Strawberry kód:
+#      @strawberry.type class X        → GraphQL typ X
+#      atribút  name: str              → jednoduché pole (hodnota je už v objekte, žiadny SQL)
+#      @strawberry.field async def f() → pole s RESOLVEROM (funkcia sa zavolá, len ak je pole v query)
+#      strawberry.Private[...]         → interná hodnota servera, v schéme nie je
+#      info.context                    → kontext requestu: DB spojenie, režim, rola, DataLoader
 # ════════════════════════════════════════════════════════════════════════
 
+# type Price — listový typ, nemá vlastné SQL; vytvára ho to_price() z riadku tabuľky prices
 @strawberry.type(description="Cena sedadla")
 class Price:
     amount: float = strawberry.field(description="Suma v EUR")
@@ -73,6 +114,7 @@ class Price:
         return self.internal_cost_cents / 100
 
 
+# type Seat — id/row/number sú hotové hodnoty; price je resolver → tu vzniká N+1
 @strawberry.type(description="Sedadlo")
 class Seat:
     id: strawberry.ID
@@ -90,6 +132,7 @@ class Seat:
     # ── /ukážka C3 ──
 
 
+# type Event — seats robí 1 SQL pre celý zoznam; name/venue iba ak sú v query
 @strawberry.type(description="Udalosť (koncert)")
 class Event:
     id: strawberry.ID
@@ -115,6 +158,7 @@ class Event:
         return row.venue if row else None
 
 
+# type Query — vstupný bod: každá query začína jedným z týchto polí
 @strawberry.type
 class Query:
     @strawberry.field(description="Referencia na udalosť; samotné volanie nerobí SQL dotaz")
@@ -122,6 +166,7 @@ class Query:
         return Event(id=id)
 
 
+# Z tried hore Strawberry poskladá schému (SDL je na GET /graphql/schema.graphql).
 # Ochrana: maximálna hĺbka vnorenia query
 schema = strawberry.Schema(query=Query, extensions=[QueryDepthLimiter(max_depth=6)])
 
